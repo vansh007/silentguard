@@ -1,0 +1,26 @@
+# data — never commit (large + sensitive)
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+physionet.org/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# models / logs
+*.pt
+*.pkl
+*.joblib
+wandb/
+mlruns/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/

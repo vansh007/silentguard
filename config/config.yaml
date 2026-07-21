@@ -1,0 +1,27 @@
+# Central config. Read via src/silentguard/config.py. Never hardcode paths in code.
+paths:
+  challenge_2015: data/raw/challenge-2015
+  vtac: data/raw/vtac
+  interim: data/interim
+  processed: data/processed
+  artifacts: data/processed/models
+
+signal:
+  fs: 250                 # Hz (both datasets resampled to 250)
+  window_seconds: 16      # analysis window ending at the alarm
+  bandpass_hz: [0.5, 40]  # ECG band-pass
+
+labels:
+  # PhysioNet 2015 arrhythmia alarm types
+  arrhythmias: [ASYSTOLE, BRADY, TACHY, VTACH, VFIB]
+
+safety:
+  # SUPPRESS if p(false) >= t_high ; KEEP if p(false) <= (1 - keep_margin) ; else DEFER
+  # calibrate on validation so true-alarm sensitivity >= min_true_sensitivity
+  t_high: 0.90
+  min_true_sensitivity: 0.99
+
+eval:
+  cv_folds: 5
+  fn_penalty: 5           # the challenge score's false-negative weight
+  random_seed: 42

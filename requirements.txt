@@ -1,0 +1,27 @@
+# --- core / signals ---
+numpy>=1.26
+scipy>=1.11
+pandas>=2.1
+wfdb>=4.1            # PhysioNet WFDB record I/O
+neurokit2>=0.2.7    # ECG/PPG processing, beat detection
+PyYAML>=6.0
+
+# --- classical ML ---
+scikit-learn>=1.4
+xgboost>=2.0
+imbalanced-learn>=0.12   # class-imbalance handling (SMOTE etc.)
+
+# --- deep learning ---
+torch>=2.2
+
+# --- explainability ---
+shap>=0.44
+matplotlib>=3.8
+
+# --- backend (product) ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# --- dev ---
+pytest>=8.0
