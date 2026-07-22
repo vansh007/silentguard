@@ -197,6 +197,48 @@ def test_deep_model_trains_and_predicts():
     assert aw is not None and abs(float(aw.sum()) - 1.0) < 1e-4
 
 
+def test_frozen_ensemble_entry_point():
+    """FrozenEnsemble.predict_one returns the product decision bundle; save/load round-trips."""
+    import importlib
+    if importlib.util.find_spec("torch") is None:
+        import pytest
+        pytest.skip("torch not installed")
+    import tempfile
+    import numpy as np
+    from silentguard.config import load_config
+    from silentguard.data.io import AlarmRecord
+    from silentguard.features.waveform_features import extract_feature_vector
+    from silentguard.models.baseline import build_model
+    from silentguard.models.cnn import make_model
+    from silentguard.models.ensemble import FrozenEnsemble
+    cfg = load_config()
+    fs = cfg["signal"]["fs"]
+    rng = np.random.default_rng(0)
+    sig = rng.standard_normal(fs * 330).astype(float)
+    rec = AlarmRecord(record_id="synthetic", fs=fs,
+                      signals={"II": sig, "V": sig * 0.5, "PLETH": rng.standard_normal(fs * 330)},
+                      arrhythmia="ASYSTOLE", label=None, dataset="challenge-2015",
+                      alarm_sample=fs * 300)
+    names = list(extract_feature_vector(rec, cfg).keys())
+    rf = build_model("rf", cfg).fit(rng.normal(size=(40, len(names))), np.array([0, 1] * 20))
+    cnn_state = {k: v.clone() for k, v in make_model("cnn", 3).state_dict().items()}
+    frozen = FrozenEnsemble(rf, cnn_state, 3, names, t_high=0.9, t_low=0.1, cfg=cfg)
+
+    out = frozen.predict_one(rec)
+    assert set(out) >= {"p_false", "p_true", "decision", "confidence", "reasons", "latency_used_s"}
+    assert 0.0 <= out["p_false"] <= 1.0 and abs(out["p_true"] + out["p_false"] - 1.0) < 1e-6
+    assert out["decision"] in ("suppress", "keep", "defer")
+    assert 0.5 <= out["confidence"] <= 1.0
+    assert out["latency_used_s"] >= 0.0
+    assert len(out["reasons"]) >= 1 and "feature" in out["reasons"][0]
+
+    with tempfile.TemporaryDirectory() as d:
+        frozen.save(d)
+        reloaded = FrozenEnsemble.load(d, cfg)
+        out2 = reloaded.predict_one(rec)
+        assert abs(out2["p_false"] - out["p_false"]) < 1e-6   # deterministic round-trip
+
+
 def test_waveform_tensor_shape_if_data_present():
     """If the dataset is present, the waveform tensor has the right shape and is bounded."""
     from pathlib import Path

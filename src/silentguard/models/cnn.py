@@ -27,16 +27,16 @@ from .baseline import select_threshold
 # ----------------------------------------------------------------------------------
 # Waveform tensor construction
 # ----------------------------------------------------------------------------------
-def build_waveform_tensor(cfg: dict, rebuild: bool = False):
-    """Load every training record into a fixed [N, 3, T] float32 tensor (cached to npz).
+CLIP = 8.0  # robust normalization can explode on near-flat signals; clip to a sane z-range
+
+
+def record_to_channels(rec, cfg: dict) -> np.ndarray:
+    """Build one record's fixed [3, T] waveform tensor (used for training AND inference).
 
     Channels: 0 = primary ECG, 1 = secondary ECG lead (or zeros), 2 = pulse ABP/PLETH
-    (or zeros). Each channel is preprocessed and normalized; the window is the last
-    ``signal.window_seconds`` ending at the alarm.
-
-    Returns (X [N,3,T] float32, y [N] int, groups [N] str, record_ids [N] str).
+    (or zeros). Each channel is preprocessed, normalized, clipped to +/-CLIP, and the
+    window is the last ``signal.window_seconds`` ending at the alarm.
     """
-    from ..data.io import load_challenge2015_record, list_challenge2015_records
     from ..preprocessing.filters import preprocess_ecg, remove_baseline_wander, normalize
 
     fs = int(cfg["signal"]["fs"])
@@ -45,6 +45,32 @@ def build_waveform_tensor(cfg: dict, rebuild: bool = False):
     low, high = float(band[0]), float(band[1])
     T = int(round(win_s * fs))
 
+    def _fix_len(a: np.ndarray) -> np.ndarray:
+        a = np.nan_to_num(np.clip(np.asarray(a, dtype=np.float32), -CLIP, CLIP))
+        if len(a) >= T:
+            return a[-T:]
+        return np.pad(a, (T - len(a), 0))  # left-pad short signals with zeros
+
+    chans = np.zeros((3, T), dtype=np.float32)
+    leads = rec.ecg_leads()
+    if leads:
+        chans[0] = _fix_len(preprocess_ecg(rec.window(win_s, rec.signals[leads[0]]), fs, low, high))
+    if len(leads) >= 2:
+        chans[1] = _fix_len(preprocess_ecg(rec.window(win_s, rec.signals[leads[1]]), fs, low, high))
+    pulse = rec.pulse_channel()
+    if pulse is not None:
+        chans[2] = _fix_len(normalize(remove_baseline_wander(rec.window(win_s, pulse[1]), fs)))
+    return chans
+
+
+def build_waveform_tensor(cfg: dict, rebuild: bool = False):
+    """Load every training record into a fixed [N, 3, T] float32 tensor (cached to npz).
+
+    Returns (X [N,3,T] float32, y [N] int, groups [N] str, record_ids [N] str).
+    """
+    from ..data.io import load_challenge2015_record, list_challenge2015_records
+
+    win_s = float(cfg["signal"]["window_seconds"])
     cache = resolve(cfg["paths"]["interim"]) / f"challenge2015_waveforms_{int(win_s)}s.npz"
     if cache.exists() and not rebuild:
         d = np.load(cache, allow_pickle=True)
@@ -53,33 +79,13 @@ def build_waveform_tensor(cfg: dict, rebuild: bool = False):
     training_dir = resolve(cfg["paths"]["challenge_2015"]) / "training"
     stems = list_challenge2015_records(training_dir)
 
-    CLIP = 8.0  # robust normalization can explode on near-flat signals; clip to a sane z-range
-
-    def _fix_len(a: np.ndarray) -> np.ndarray:
-        a = np.nan_to_num(np.clip(np.asarray(a, dtype=np.float32), -CLIP, CLIP))
-        if len(a) >= T:
-            return a[-T:]
-        return np.pad(a, (T - len(a), 0))  # left-pad short signals with zeros
-
     X, y, groups, ids = [], [], [], []
     for stem in stems:
         try:
             rec = load_challenge2015_record(stem)
             if rec.label is None:
                 continue
-            chans = np.zeros((3, T), dtype=np.float32)
-            leads = rec.ecg_leads()
-            if leads:
-                ecg1 = preprocess_ecg(rec.window(win_s, rec.signals[leads[0]]), fs, low, high)
-                chans[0] = _fix_len(ecg1)
-            if len(leads) >= 2:
-                ecg2 = preprocess_ecg(rec.window(win_s, rec.signals[leads[1]]), fs, low, high)
-                chans[1] = _fix_len(ecg2)
-            pulse = rec.pulse_channel()
-            if pulse is not None:
-                psig = normalize(remove_baseline_wander(rec.window(win_s, pulse[1]), fs))
-                chans[2] = _fix_len(psig)
-            X.append(chans)
+            X.append(record_to_channels(rec, cfg))
             y.append(int(rec.label))
             groups.append(rec.arrhythmia)
             ids.append(rec.record_id)

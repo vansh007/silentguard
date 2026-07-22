@@ -79,22 +79,9 @@ def main():
         loao = cnn.leave_one_arrhythmia_out_deep(Xw, y, groups, cfg, arch=arch)
         results[name] = {"base": base, "loao": loao, "oof": base["oof_proba"]}
 
-    # ---- RF + CNN ensemble (complementary representations; equal weight, no tuning) ----
-    if "RandomForest" in results and "1D-CNN" in results:
-        fn = int(cfg["eval"]["fn_penalty"])
-        rf, cn = results["RandomForest"], results["1D-CNN"]
-        oof_ens = 0.5 * (rf["oof"] + cn["oof"])
-        thr = baseline.select_threshold(y, oof_ens, fn)
-        keep = (oof_ens >= thr).astype(int)
-        base_ens = {"metrics": cnn._agg_metrics(y, oof_ens, keep, thr, fn),
-                    "oof_proba": oof_ens,
-                    "per_arrhythmia": cnn._per_group(groups, y, keep, oof_ens, fn)}
-        lp = 0.5 * (rf["loao"]["pooled_proba"] + cn["loao"]["pooled_proba"])
-        thr2 = baseline.select_threshold(y, lp, fn)
-        keepl = (lp >= thr2).astype(int)
-        loao_ens = {"pooled": cnn._agg_metrics(y, lp, keepl, 0.5, fn),
-                    "per_group": cnn._per_group(groups, y, keepl, lp, fn)}
-        results["RF+CNN ensemble"] = {"base": base_ens, "loao": loao_ens, "oof": oof_ens}
+    # NOTE: the RF+CNN ENSEMBLE and its FROZEN, fully leak-free (same-protocol) evaluation
+    # live in scripts/05_freeze_ensemble.py. This script (04) is the raw per-architecture
+    # comparison (RF vs 1D-CNN vs Attn-CNN-LSTM); see 05 for the final engine + corrected numbers.
 
     # ---- in-distribution comparison ----
     print("\n" + "=" * 74)
