@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SilentGuard — real engine proof</title>
+<style>
+  :root { --bg:#05070a; --panel:#0d1117; --line:#1c2530; --ecg:#3ddc84; --muted:#7d8794;
+          --suppress:#ef4444; --keep:#22c55e; --defer:#f59e0b; --text:#e6edf3; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:16px; letter-spacing:.02em; font-weight:600; }
+  header p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+  .disclaimer { color:#b58900; font-size:11px; margin-top:6px; }
+  main { display:grid; grid-template-columns:260px 1fr; gap:0; min-height:calc(100vh - 92px); }
+  aside { border-right:1px solid var(--line); padding:14px; overflow:auto; }
+  aside h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:6px 4px 10px; }
+  .rec { padding:9px 11px; border:1px solid var(--line); border-radius:9px; margin-bottom:8px;
+         cursor:pointer; transition:.15s; background:var(--panel); }
+  .rec:hover { border-color:#2b3a4a; transform:translateY(-1px); }
+  .rec.active { border-color:var(--ecg); box-shadow:0 0 0 1px var(--ecg) inset; }
+  .rec .id { font-weight:600; font-size:13px; }
+  .rec .note { color:var(--muted); font-size:11px; margin-top:2px; }
+  .rec .tag { font-size:10px; padding:1px 6px; border-radius:6px; margin-top:5px; display:inline-block; }
+  section.stage { padding:22px 26px; position:relative; }
+  .scr { position:relative; background:#04140c; border:1px solid var(--line); border-radius:12px;
+         overflow:hidden; height:300px; }
+  canvas { display:block; width:100%; height:300px; }
+  .alarm-flash { position:absolute; inset:0; background:var(--suppress); opacity:0; pointer-events:none;
+                 transition:opacity .12s; }
+  .lead { position:absolute; top:10px; left:14px; color:var(--muted); font-size:11px; letter-spacing:.05em; }
+  .status { position:absolute; top:10px; right:14px; font-size:11px; color:var(--muted); }
+  .verdict { margin-top:20px; border:1px solid var(--line); border-radius:12px; padding:20px 22px;
+             background:var(--panel); min-height:150px; }
+  .verdict .decision { font-size:30px; font-weight:700; letter-spacing:.02em; }
+  .verdict .sub { color:var(--muted); font-size:13px; margin-top:2px; }
+  .bar { height:8px; border-radius:5px; background:#16202b; margin-top:14px; overflow:hidden; }
+  .bar > span { display:block; height:100%; border-radius:5px; transition:width .6s ease; }
+  .reasons { margin-top:16px; }
+  .reasons h3 { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 8px; }
+  .reason { display:flex; align-items:center; gap:10px; margin-bottom:6px; font-size:12px; }
+  .reason .name { width:150px; color:#c4ccd6; font-family:ui-monospace,monospace; font-size:11px; }
+  .reason .rbar { flex:1; height:6px; background:#16202b; border-radius:4px; position:relative; }
+  .reason .rbar > i { position:absolute; top:0; bottom:0; border-radius:4px; }
+  .truth { margin-top:14px; font-size:11px; color:var(--muted); }
+  .idle { color:var(--muted); }
+  button.play { margin-top:12px; background:var(--ecg); color:#04140c; border:none; padding:8px 16px;
+                border-radius:8px; font-weight:600; cursor:pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SilentGuard — real-engine proof <span style="color:var(--muted);font-weight:400">· Step 1</span></h1>
+  <p>Every waveform, beat marker, and verdict below is computed live by the frozen RF+CNN ensemble on real PhysioNet/CinC-2015 ICU records. No values are hardcoded.</p>
+  <p class="disclaimer">⚠ Research prototype — NOT a cleared medical device. Do not use for clinical decisions.</p>
+</header>
+<main>
+  <aside>
+    <h2>Demo records</h2>
+    <div id="reclist"><div class="idle">loading…</div></div>
+  </aside>
+  <section class="stage">
+    <div class="scr">
+      <canvas id="ecg"></canvas>
+      <div class="alarm-flash" id="flash"></div>
+      <div class="lead" id="lead">—</div>
+      <div class="status" id="status">select a record</div>
+    </div>
+    <button class="play" id="replay" style="display:none">▶ Replay</button>
+    <div class="verdict" id="verdict">
+      <div class="idle">Pick a record on the left. Its ECG streams in real time; when the alarm
+      fires, the engine's live verdict appears here.</div>
+    </div>
+  </section>
+</main>
+<script>
+const DEC = { suppress:{c:'var(--suppress)', label:'SUPPRESS', sub:'confident false alarm — silenced'},
+              keep:{c:'var(--keep)', label:'KEEP', sub:'likely real — reaches the nurse'},
+              defer:{c:'var(--defer)', label:'DEFER', sub:'uncertain — routed to a human'} };
+const cv = document.getElementById('ecg'), ctx = cv.getContext('2d');
+const statusEl = document.getElementById('status'), leadEl = document.getElementById('lead');
+const flash = document.getElementById('flash'), verdictEl = document.getElementById('verdict');
+let ws = null, buf = [], beats = new Set(), drawn = 0, raf = null, curId = null;
+
+function resize(){ const r = cv.getBoundingClientRect(); cv.width = r.width*devicePixelRatio;
+  cv.height = 300*devicePixelRatio; ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+addEventListener('resize', resize);
+
+function render(){
+  const W = cv.width/devicePixelRatio, H = 300;
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(61,220,132,0.06)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=25){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  const n = buf.length; if(!n) return;
+  const show = Math.min(drawn, n);
+  const step = W / n, mid = H/2, amp = H*0.34;
+  // ECG trace
+  ctx.strokeStyle='var(--ecg)'; ctx.lineWidth=1.6; ctx.beginPath();
+  for(let i=0;i<show;i++){ const x=i*step, y=mid - buf[i]*amp; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke();
+  // beat markers
+  ctx.fillStyle='rgba(120,180,255,0.9)';
+  beats.forEach(b=>{ if(b<show){ const x=b*step, y=mid-buf[b]*amp; ctx.beginPath();
+    ctx.arc(x,y,2.4,0,7); ctx.fill(); }});
+  // sweep head
+  if(show<n){ const x=show*step; ctx.strokeStyle='rgba(61,220,132,0.5)'; ctx.beginPath();
+    ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+}
+function loop(){ if(drawn<buf.length){ drawn+=Math.max(1,buf.length/200);} render(); raf=requestAnimationFrame(loop); }
+
+function reset(){ if(ws){ws.close();ws=null;} if(raf)cancelAnimationFrame(raf);
+  buf=[]; beats=new Set(); drawn=0; flash.style.opacity=0; resize(); render(); }
+
+function doFlash(){ flash.style.opacity=0.55; setTimeout(()=>flash.style.opacity=0,140);
+  setTimeout(()=>{flash.style.opacity=0.35;setTimeout(()=>flash.style.opacity=0,140);},260); }
+
+function showVerdict(v){
+  const d = DEC[v.decision] || {c:'#888',label:v.decision.toUpperCase(),sub:''};
+  const conf = Math.round(v.confidence*100), pf = Math.round(v.p_false*100);
+  const truth = v.true_label===1?'TRUE alarm':(v.true_label===0?'FALSE alarm':'unknown');
+  const reasons = (v.reasons||[]).map(r=>{
+    const val=r.contribution_to_true, w=Math.min(100,Math.abs(val)*700), pos=val>0;
+    return `<div class="reason"><span class="name">${r.feature}</span>
+      <span class="rbar"><i style="${pos?'left:50%':'right:50%'};width:${w/2}%;
+      background:${pos?'var(--keep)':'var(--suppress)'}"></i>
+      <i style="left:50%;width:1px;background:#3a4655"></i></span></div>`;
+  }).join('');
+  verdictEl.innerHTML = `
+    <div class="decision" style="color:${d.c}">${d.label}</div>
+    <div class="sub">${d.sub}</div>
+    <div class="bar"><span style="width:${conf}%;background:${d.c}"></span></div>
+    <div class="sub" style="margin-top:6px">confidence ${conf}% · P(false)=${pf}% · latency ${v.latency_used_s}s</div>
+    <div class="reasons"><h3>Why (SHAP, → TRUE green / → SUPPRESS red)</h3>${reasons||'<span class="idle">no reasons</span>'}</div>
+    <div class="truth">Ground truth for this record: <b>${truth}</b> (${v.arrhythmia}). Shown for honesty — the engine never sees it.</div>`;
+}
+
+function play(id){
+  reset(); curId=id; verdictEl.innerHTML='<div class="idle">streaming ECG… the verdict appears when the alarm fires.</div>';
+  document.querySelectorAll('.rec').forEach(e=>e.classList.toggle('active',e.dataset.id===id));
+  document.getElementById('replay').style.display='inline-block';
+  const proto = location.protocol==='https:'?'wss':'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/stream/${id}?speed=3`);
+  loop();
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if(m.type==='meta'){ leadEl.textContent = `lead ${m.channel} · ${m.fs}Hz · ${m.arrhythmia}`;
+      statusEl.textContent='monitoring…'; (m.beats||[]).forEach(b=>beats.add(b)); buf=new Array(m.total).fill(0); }
+    else if(m.type==='samples'){ for(let k=0;k<m.v.length;k++) buf[m.i+k]=m.v[k]; drawn=Math.max(drawn,m.i+m.v.length); }
+    else if(m.type==='alarm'){ statusEl.textContent='⚠ ALARM'; statusEl.style.color='var(--suppress)'; doFlash(); }
+    else if(m.type==='verdict'){ statusEl.textContent='analyzed'; statusEl.style.color='var(--muted)'; showVerdict(m); }
+    else if(m.type==='error'){ verdictEl.innerHTML=`<div style="color:var(--suppress)">Engine error: ${m.detail}</div>`; }
+  };
+  ws.onclose = ()=>{ if(drawn<buf.length) drawn=buf.length; };
+}
+
+fetch('/api/records').then(r=>r.json()).then(d=>{
+  const el = document.getElementById('reclist'); el.innerHTML='';
+  d.records.forEach(r=>{
+    const dec = DEC[r.decision]||{c:'#888',label:r.decision||'?'};
+    const div = document.createElement('div'); div.className='rec'; div.dataset.id=r.id;
+    div.innerHTML = `<div class="id">${r.id} · ${r.arrhythmia||''}</div>
+      <div class="note">${r.note||''}</div>
+      <span class="tag" style="background:${dec.c}22;color:${dec.c}">${dec.label}</span>`;
+    div.onclick = ()=>play(r.id); el.appendChild(div);
+  });
+  statusEl.textContent='ready — pick a record';
+}).catch(e=>{ document.getElementById('reclist').innerHTML=`<div style="color:var(--suppress)">API error: ${e}</div>`; });
+
+document.getElementById('replay').onclick = ()=>{ if(curId) play(curId); };
+resize(); render();
+</script>
+</body>
+</html>
