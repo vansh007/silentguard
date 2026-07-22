@@ -115,15 +115,19 @@ Label 1 = TRUE alarm, 0 = FALSE. Headline metric = challenge score `(TP+TN)/(TP+
 (i.e. `(TP+TN)/(TP+TN+FP+5·FN)`); always co-report **true-alarm sensitivity** (must stay ~100%)
 and AUROC. All experiments are on the 750 public CinC-2015 records.
 
-| ID | Claim it proves | Setup | Train → Test | Primary metric | "Success" |
-|----|-----------------|-------|--------------|----------------|-----------|
-| **E1** | We reproduce the benchmark | 5-fold CV on the 750 public records | CinC-2015 → CV folds | Challenge score, AUROC, per-arrhythmia | In the range of published entries (~75–84) |
-| **E2** | **Generalization to unseen arrhythmias (headline)** | Leave-One-Arrhythmia-Out: train on 4 types, test on the held-out 5th; repeat ×5 | CinC-2015 (4 types) → held-out type | Score + true-sens + AUROC per held-out type, **Δ vs E1** | A real, quantified gap per type; identify which arrhythmia generalizes worst |
-| ~~E-old~~ | ~~Cross-dataset transfer / few-shot local calibration~~ | **Dropped** — required VTaC (second dataset), which is out of scope. | — | — | LOSO + few-shot are future work (see C1b, §3). |
-| **E4** | Adaptive latency beats fixed | Per-alarm wait vs fixed 0 s / 30 s | CinC-2015 (CV) | FA-suppression @ fixed true-sens, **mean latency** | More suppression at lower mean latency than fixed-30 s |
-| **E5** | Deferral is safe | Selective prediction: coverage vs risk | CinC-2015 (CV) | True-alarm sens ≥ 99% at operating point; defer-rate | High FA suppression at ~100% true-sens |
-| **E7** | Explanations are plausible | SHAP on n worked examples | (any trained model) | qualitative + SQI-importance | Reasons align with signal-quality / HR-mismatch |
-| **E8** | Rigor / calibration | Nested CV, calibration, ECE | CinC-2015 | ECE, reliability curve | No test-set tuning; calibrated probabilities |
+| ID | Claim it proves | Setup | Model | Primary metric | Result (5-fold CV / LOAO on 750) |
+|----|-----------------|-------|-------|----------------|-----------|
+| **E1** | We reproduce the benchmark | 5-fold CV on the 750 public records | RF / CNN / **RF+CNN ensemble** | Challenge score, AUROC | RF 0.641 (AUROC 0.893); CNN 0.611 (0.846); **ensemble 0.713 (AUROC 0.916), true-sens 0.939** |
+| **E2** | **Generalization to unseen arrhythmias (headline)** | Leave-One-Arrhythmia-Out: train on 4 types, test on the held-out 5th; repeat ×5 (physiological features; threshold from training types only) | RF / CNN / ensemble | Pooled score + per held-out type | **Large gap** (ensemble 0.713→**0.323**); **TACHY generalizes worst** (0.14, AUROC <0.5); ASYSTOLE best (0.54) |
+| **E-deep** | Deep adds complementary signal | 1-D CNN + attention CNN-LSTM on raw waveform; RF+CNN ensemble | vs RF | AUROC + safety operating point | Deep alone < RF (small data); **ensemble > both**: AUROC 0.893→0.916 |
+| ~~E-old~~ | ~~Cross-dataset transfer / few-shot local calibration~~ | **Dropped** — required VTaC (second dataset). | — | — | LOSO + few-shot are future work (see C1b, §3). |
+| **E4** | Adaptive latency beats fixed | Per-alarm wait vs fixed 0 s / 30 s | ensemble | FA-suppression @ fixed true-sens, **mean latency** | `choose_latency()` built; latency–sensitivity curve needs a streaming model (future) |
+| **E5** | Deferral is safe (SUPPRESS/KEEP/DEFER) | Selective prediction at the >=99% true-sens floor (thresholds on leak-free OOF) | RF vs ensemble | True-sens ≥ 99%; FA-suppression; defer-rate | At true-sens 0.993: RF suppresses 6.8% (defer 0.78); **ensemble suppresses 31.1% (defer 0.62)** |
+| **E7** | Explanations are plausible | SHAP top reasons per alarm | RF / ensemble | qualitative + SQI-importance | Reasons align with signal-quality / HR (e.g. suppressed false asystole: SQI + HR features) |
+| **E8** | Rigor / calibration | Same-protocol leak-free CV (threshold on a val split, never the scored fold); ECE | all models | No test-set tuning; ECE | All rows same-protocol; ensemble ECE ≈ 0.09 |
+
+*All numbers are leak-free: every model's operating threshold is selected on a validation split
+held out from training, never on the fold being scored.*
 
 **The figures/tables that carry the paper:**
 1. T-E1: per-arrhythmia benchmark table (shows you handle all five, incl. the hard VTA).

@@ -120,49 +120,47 @@ docs/            roadmap + title page
 - Every reported number states the dataset, the split (CV fold or benchmark split), and the metric.
 
 ## Current status
-**Single-dataset project (CinC-2015 only). Build steps 1–5, 7, 8, 11 done; Reviews 1–3
-targets met. Steps 6 (deep model), 12 (product) remain.** Two runnable entrypoints:
-- `python scripts/02_train_baseline.py` — in-distribution RF/XGB baseline (E1).
-- `python scripts/03_generalization.py` — LOAO generalization + safety + one explanation.
-Features cache: `data/interim/challenge2015_features.csv`. Results CSVs in `data/processed/`.
+**Single-dataset project (CinC-2015 only). Build steps 1–8, 11 done; Reviews 1–3 met. FINAL
+ENGINE FROZEN (RF+CNN ensemble). Only step 12 (product/website) remains.** Runnable entrypoints:
+- `scripts/02_train_baseline.py` — RF/XGB feature baseline (E1). `03_generalization.py` — RF
+  LOAO + safety + explanation. `04_deep_model.py` — RF vs CNN vs attention per-arch comparison.
+- **`scripts/05_freeze_ensemble.py`** — the deliverable: leak-free same-protocol eval, calibrates
+  safety, **freezes the RF+CNN ensemble to `data/processed/models/ensemble/`**, verifies the
+  product entry point. Caches: features CSV + `challenge2015_waveforms_16s.npz` in `data/interim/`.
 
-**E1 — in-distribution 5-fold CV (750 public records; hidden 500-test unavailable):**
-| model | challenge score | true-alarm sens. | specificity | ROC-AUC |
-|-------|-----------------|------------------|-------------|---------|
-| XGBoost | **0.662** | 0.929 | 0.612 | 0.897 |
-| RandomForest | 0.635 | 0.895 | 0.640 | 0.897 |
-Per-type (XGB): TACHY easy (0.94/AUROC 0.98); VTACH hardest in-distribution (0.57/0.80).
+**ALL numbers below are leak-free & same-protocol** (each model's KEEP threshold chosen on a
+validation split held out from training, never the scored fold). 5-fold CV / LOAO on 750 records:
+| model | in-dist score | true-sens | AUROC | LOAO pooled | safety FA-supp @≥0.99 | defer |
+|-------|--------------|-----------|-------|-------------|-----------------------|-------|
+| RandomForest | 0.641 | 0.898 | 0.893 | 0.235 | 0.068 | 0.779 |
+| 1D-CNN | 0.611 | 0.895 | 0.846 | 0.290 | 0.086 | 0.912 |
+| **RF+CNN ensemble (FINAL)** | **0.713** | **0.939** | **0.916** | **0.323** | **0.311** | **0.624** |
+(XGBoost feature-only baseline, separate protocol: 0.662 / AUROC 0.897.)
 
-**C1 — LOAO generalization (RF, physiological features; the headline result):**
-Pooled score **0.290** (vs 0.635 in-distribution → **gap −0.345**); pooled true-sens 0.45.
-Per held-out type: ASYSTOLE 0.60 (generalizes BEST, +0.08), VFIB 0.52, VTACH 0.37, BRADY 0.23,
-**TACHY 0.11 — worst, AUROC 0.375 (inverted ranking): a model never trained on tachycardia
-wrongly suppresses tachy alarms because the other four types are false-dominated.**
-LOSO (C1b): NOT feasible (no source tags in headers).
+**Deep model (step 6):** 1D-CNN + attention CNN-LSTM on raw 3-channel waveform [ECG1,ECG2,pulse],
+clipped to ±8 (robust-normalize explodes on flat signals — that bug silently broke CNN training).
+Deep **alone < RF** (small data), but **complementary → the equal-weight RF+CNN ensemble wins**.
 
-**Step 6 — deep model (`scripts/04_deep_model.py`, torch installed):** 1D-CNN + attention
-CNN-LSTM on the raw 3-channel waveform (fixed [ECG1, ECG2, pulse] tensor, values clipped to ±8
-— robust-normalize can explode on flat signals; that bug silently broke training until fixed).
-**Deep models alone do NOT beat RF** (small data: CNN AUROC 0.846, attn 0.775 < RF 0.897), and
-alone they *defer more* (0.91). **But RF+CNN are complementary — the equal-weight ensemble wins:**
-| model | in-dist score | AUROC | LOAO pooled | safety FA-supp @99% | defer |
-|-------|--------------|-------|-------------|---------------------|-------|
-| RandomForest | 0.635 | 0.897 | 0.290 | 0.079 | 0.767 |
-| 1D-CNN | 0.611 | 0.846 | 0.290 | 0.086 | 0.912 |
-| Attn-CNN-LSTM | 0.486 | 0.775 | 0.253 | 0.053 | 0.919 |
-| **RF+CNN ensemble** | **0.729** | **0.920** | **0.484** | **0.276** | **0.643** |
-Fair (identical-protocol) comparisons = AUROC and the safety operating point (both calibrated the
-same way for every model). **Answer to "does better AUROC let us defer less?": YES via the
-ensemble — AUROC 0.897→0.920 lifts FA-suppression 7.9%→27.6% and cuts defer 0.767→0.643 at the
-same ≥99% floor.** (Ensemble challenge-score rows use an OOF-set threshold → treat as indicative;
-AUROC + safety are the rigorous numbers.)
+**Answer to "does better AUROC let us defer less?": YES via the ensemble** — AUROC 0.893→0.916
+lifts false-alarm suppression 6.8%→**31.1%** and cuts the defer rate 0.779→**0.624** at the same
+≥99% true-alarm sensitivity floor. AUROC and the safety operating point are the identical-protocol
+comparisons.
 
-**C2 — safety layer (thresholds on 5-fold OOF, identical for every model):** all models hold
-true-sens **0.993 ≥ 0.99 floor**; see table above for FA-suppression/defer. `choose_latency()`
-implemented+tested (latency-vs-sensitivity curve still needs a streaming/growing-window model).
+**C1 — LOAO generalization (headline, physiological features, leak-free):** all models generalize
+poorly to unseen arrhythmias (ensemble 0.713 in-dist → **0.323** LOAO). **TACHY worst (~0.1, AUROC
+<0.5 — inverted): a model never trained on tachycardia wrongly suppresses tachy alarms.** ASYSTOLE
+best (0.54). LOSO (C1b): NOT feasible (no source tags). *Rigor note:* the earlier ensemble LOAO
+(0.484) was OOF-threshold-inflated; 0.323 is the corrected leak-free value.
 
-**C3 — trust:** SHAP top-reasons per alarm (e.g. a suppressed false asystole → "beats present:
-n_beats/hr_mean push away from TRUE; high baseline-wander SQI"); calibration ECE ≈ 0.08.
+**C2 — safety (frozen thresholds calibrated on leak-free OOF):** true-sens 0.993 ≥ floor; see
+table. `choose_latency()` implemented+tested (latency curve still needs a streaming model).
+
+**C3 — trust:** SHAP top-reasons per alarm (SQI + HR features); ensemble calibration ECE ≈ 0.09.
+
+**FROZEN ENGINE / product handoff:** `models/ensemble.py::FrozenEnsemble` — `predict_one(rec)`
+returns `{p_false, decision (SUPPRESS/KEEP/DEFER), confidence, reasons, latency_used_s}`. Load via
+`FrozenEnsemble.load(data/processed/models/ensemble, cfg)`. Artifacts (rf.joblib, cnn.pt,
+ensemble_meta.json) are git-ignored — regenerate with `scripts/05_freeze_ensemble.py`.
 
 **Env note:** venv at `.venv/`; installed: core + sklearn/xgboost + shap + matplotlib + **torch 2.13**.
 fastapi NOT installed (added at step 12). `pip install -e .` done. Data at
