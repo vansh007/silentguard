@@ -127,6 +127,9 @@ ENGINE FROZEN (RF+CNN ensemble). Only step 12 (product/website) remains.** Runna
 - **`scripts/05_freeze_ensemble.py`** — the deliverable: leak-free same-protocol eval, calibrates
   safety, **freezes the RF+CNN ensemble to `data/processed/models/ensemble/`**, verifies the
   product entry point. Caches: features CSV + `challenge2015_waveforms_16s.npz` in `data/interim/`.
+- **`scripts/make_figures.py`** → `docs/figures/*.png` + `data/processed/{loao_pertype,safety_detail}.csv`.
+- **Docs:** `docs/PROJECT_LOG.md` (research diary — problems & fixes, for the paper's lessons) and
+  `docs/RESULTS.md` (paper-ready tables + figure captions; all numbers leak-free & same-protocol).
 
 **ALL numbers below are leak-free & same-protocol** (each model's KEEP threshold chosen on a
 validation split held out from training, never the scored fold). 5-fold CV / LOAO on 750 records:
