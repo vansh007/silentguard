@@ -9,12 +9,13 @@ blood-flow scroll) are next. Built in the order *real-but-plain → beautiful*.
 
 ## Prerequisites
 - Node 18+ (tested on Node 20).
-- The backend running (it serves the real engine):
+- The backend running (it serves the real engine). Use the project venv **`.venv/`** — the full
+  path avoids conda/activation issues:
   ```bash
-  # from repo root, with the Python env active and the frozen model built:
-  uvicorn service.main:app --port 8000
+  # from repo root:
+  .venv/bin/uvicorn service.main:app --port 8000
   ```
-  See `service/README.md` (and run `python scripts/05_freeze_ensemble.py` if the model is missing).
+  See `service/README.md` (and run `.venv/bin/python scripts/05_freeze_ensemble.py` if the model is missing).
 
 ## Run (development)
 ```bash

@@ -12,9 +12,19 @@ Serves the **real** frozen RF+CNN ensemble. Every waveform, beat marker, and ver
 3. CinC-2015 records present at `data/raw/challenge-2015/training/` (see DATASETS.md).
 
 ## Run
+Use the project virtualenv **`.venv/`** (already has the deps + editable install). The simplest,
+foolproof way is the full path — no `activate` needed, and it won't collide with conda `(base)`:
 ```bash
-uvicorn service.main:app --reload --port 8000
+cd <repo root>
+.venv/bin/uvicorn service.main:app --reload --port 8000
 ```
+Or activate first (note the leading dot — it's `.venv`, not `venv`):
+```bash
+source .venv/bin/activate && uvicorn service.main:app --reload --port 8000
+```
+> If you see `ModuleNotFoundError: No module named 'silentguard'`, you're running the wrong Python
+> (e.g. anaconda `base` or a fresh empty `venv`). Use `.venv/bin/uvicorn` as above. To rebuild the
+> env from scratch: `python -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/pip install -e .`
 Then open **http://127.0.0.1:8000/** — the Step-1 proof page: pick a record, its ECG streams in
 real time, the alarm fires, and the engine's live verdict + reasons appear. (Plain by design;
 the cinematic frontend lives in `web/`.)
