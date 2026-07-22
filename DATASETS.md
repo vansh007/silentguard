@@ -1,11 +1,15 @@
 # DATASETS.md — what to download, from where, and where to save it
 
-Two open-access datasets. Both are waveform data in **WFDB format** (`.hea` header + `.dat`
-signal), sampled at **250 Hz**. Neither needs paid access or CITI credentialing. Total disk
-needed: keep **~8–10 GB free** (VTaC alone is ~4 GB uncompressed).
+> **Scope decision (2026-07-22): this project uses ONLY the PhysioNet/CinC 2015 dataset.**
+> VTaC was dropped (it would not download in our environment and is non-essential to the
+> contributions). The former Dataset B section is retained at the bottom, struck through, for
+> historical context — do NOT treat it as required.
+
+**One open-access dataset.** Waveform data in **WFDB format** (`.hea` header + `.mat` signal),
+sampled at **250 Hz**. No paid access or CITI credentialing. Disk needed: **~1 GB**.
 
 > A free PhysioNet account (https://physionet.org/register/) is recommended so downloads are
-> tracked, but is not strictly required for these two open datasets.
+> tracked, but is not strictly required for this open dataset.
 
 ---
 
@@ -43,39 +47,6 @@ data/raw/challenge-2015/
 
 ---
 
-## Dataset B — VTaC (EXTERNAL validation, VT alarms only)
-"Ventricular Tachycardia annotated alarms from ICUs" (NeurIPS 2023 Datasets & Benchmarks).
-
-- **What:** **5,037** VT alarm events (**1,441 true / 3,596 false**), from **3 US hospitals**
-  and **3 monitor manufacturers** — the diversity is the whole point (that's your
-  generalization test). Each record: a **6-minute** segment (5 min before + 1 min after the
-  alarm), ECG leads + pulsatile waveform(s), 250 Hz, WFDB format.
-- **Key files:**
-  - `waveforms/` — WFDB records, organized in sub-folders per patient (up to 5 events each).
-  - `event_labels.csv` — columns: `record`, `event`, `decision` (the true/false label).
-  - `benchmark_data_split.csv` — the official **train/validation/test split** → USE THIS.
-- **Page / DOI:** https://physionet.org/content/vtac/1.0/  (DOI 10.13026/8td2-g363)
-- **Access:** **open** (CC BY-SA 4.0). Size: 2.7 GB zip / **4.0 GB uncompressed**.
-- **Reference code:** https://github.com/ML-Health/VTaC (their ML scripts — useful to peek at).
-
-**Download (terminal):**
-```bash
-wget -r -N -c -np https://physionet.org/files/vtac/1.0/
-# then move into data/raw/vtac/
-```
-Or the **"Download the ZIP file"** button (2.7 GB) → unzip into `data/raw/vtac/`.
-
-**Save to:**
-```
-data/raw/vtac/
-  waveforms/
-  event_labels.csv
-  benchmark_data_split.csv
-  RECORDS
-```
-
----
-
 ## After downloading — verify it worked
 ```bash
 python -c "import wfdb; r=wfdb.rdrecord('data/raw/challenge-2015/training/a103l'); print(r.sig_name, r.fs, r.p_signal.shape)"
@@ -88,4 +59,14 @@ channels gracefully in `src/silentguard/data/io.py`.
 - **Do not commit** anything under `data/` (already git-ignored).
 - Channel availability is inconsistent across records — some have PPG, some ABP, some both.
   ECG lead II is the most commonly present; design features to degrade gracefully.
-- Cite both datasets + the standard PhysioNet reference in the paper (BibTeX in paper/outline.md).
+- Cite the dataset + the standard PhysioNet reference in the paper (BibTeX in paper/outline.md).
+
+---
+
+## ~~Dataset B — VTaC~~ (DROPPED 2026-07-22 — kept for historical context only)
+> ~~"Ventricular Tachycardia annotated alarms from ICUs" (NeurIPS 2023 Datasets & Benchmarks).~~
+> **Dropped:** the 2.7 GB download stalled at ~12 KB/s in our environment (throttled egress,
+> ~65 h ETA), and the single-dataset re-scope makes it non-essential. The cross-dataset (E2/E3)
+> and few-shot (E6) experiments that needed it are now future work; our headline generalization
+> test is Leave-One-Arrhythmia-Out on CinC-2015 (see NOVELTY.md §2). If a second, source-tagged
+> dataset is ever added, download it on a normal network — not this environment.

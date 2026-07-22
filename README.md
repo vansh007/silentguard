@@ -25,7 +25,7 @@ Course: **BCSE335L — Healthcare Data Analytics**, VIT Chennai.
 python -m venv .venv && source .venv/bin/activate     # (Windows: .venv\Scripts\activate)
 pip install -r requirements.txt
 
-# 2. Download the datasets (see DATASETS.md for details & disk needs)
+# 2. Download the dataset — CinC-2015 only, ~1 GB (see DATASETS.md)
 bash scripts/download_data.sh                          # or follow DATASETS.md manually
 
 # 3. Sanity-check one record loads and plots
@@ -37,10 +37,13 @@ python scripts/02_train_baseline.py
 
 ## Why it's novel (and India-relevant)
 See **NOVELTY.md** for the full gap analysis. In one line: the 2015 benchmark only tested
-*in-distribution* performance; we test whether a model works on **hospitals it never saw** —
-which is exactly the situation of every Indian ICU (heterogeneous monitor fleets, no local
-labelled data). Cross-hospital generalization is our headline; a few-shot local-calibration
-experiment answers "how much local data would an Indian hospital actually need?".
+*in-distribution* performance; we test whether a model generalizes to an **arrhythmia pattern it
+never trained on** — via Leave-One-Arrhythmia-Out (train on 4 types, test on the held-out 5th),
+which operationalizes the challenge's own "no best general algorithm" finding. This is our
+deployability proxy for settings with no local labelled data (e.g. Indian ICUs with heterogeneous
+monitor fleets). *Single-dataset scope:* we use only CinC-2015; cross-hospital and few-shot
+local-calibration validation are argued in design but left as future work (no source tags / no
+second dataset). See the honest limitations in NOVELTY.md §3.
 
 ## What's where
 - **CLAUDE.md** — context + rules for Claude Code (read this if you use Claude Code).
