@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "SilentGuard — ICU false-alarm intelligence",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           ⚠ Research prototype — NOT a cleared medical device. Every waveform and verdict is
           computed live by the SilentGuard engine on real PhysioNet/CinC-2015 records.
         </div>
+        <Nav />
         {children}
       </body>
     </html>

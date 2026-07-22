@@ -64,3 +64,60 @@ export const DECISION_META: Record<Decision, { label: string; sub: string; color
   keep: { label: "KEEP", sub: "likely real — reaches the nurse", color: "#22c55e" },
   defer: { label: "DEFER", sub: "uncertain — routed to a human", color: "#f59e0b" },
 };
+
+// ---- Arrhythmia Explainer ----
+export interface ExplainerCard {
+  type: string;
+  record: string;
+  name: string;
+  criterion: string;
+  clinical: string;
+  false_hint: string;
+  arrhythmia?: string;
+  true_label?: 0 | 1 | null;
+  decision?: Decision;
+  confidence?: number;
+  p_false?: number;
+  error?: string;
+}
+
+export async function fetchExplainer(): Promise<ExplainerCard[]> {
+  const r = await fetch(`${API_BASE}/api/explainer`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`explainer ${r.status}`);
+  return (await r.json()).cards as ExplainerCard[];
+}
+
+export interface WaveformData {
+  channel: string | null;
+  fs: number;
+  seconds?: number;
+  samples: number[];
+  beats: number[];
+  analysis_window_s?: number;
+  arrhythmia?: string;
+}
+
+export async function fetchWaveform(id: string, seconds = 10): Promise<WaveformData> {
+  const r = await fetch(`${API_BASE}/api/records/${id}/waveform?seconds=${seconds}`, {
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`waveform ${r.status}`);
+  return (await r.json()) as WaveformData;
+}
+
+// ---- Results ----
+export interface ResultsData {
+  available: boolean;
+  summary: Record<string, string>[];
+  loao: Record<string, string>[];
+  safety: Record<string, string>[];
+  figures: string[];
+}
+
+export async function fetchResults(): Promise<ResultsData> {
+  const r = await fetch(`${API_BASE}/api/results`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`results ${r.status}`);
+  return (await r.json()) as ResultsData;
+}
+
+export const figureUrl = (name: string) => `${API_BASE}/figures/${name}`;

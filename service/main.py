@@ -86,6 +86,18 @@ def analysis(rid: str):
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/explainer")
+def explainer():
+    """One real teaching example per arrhythmia type (clinical text + live engine verdict)."""
+    return {"cards": engine.explainer_cards()}
+
+
+@app.get("/api/results")
+def results():
+    """The REAL leak-free results (from the CSVs) + the list of available figures."""
+    return engine.read_results()
+
+
 @app.websocket("/ws/stream/{rid}")
 async def stream(ws: WebSocket, rid: str, speed: float = 1.0, seconds: float = 24.0):
     """Stream the pre-alarm waveform in real time, then fire the alarm and the REAL verdict."""
@@ -123,6 +135,12 @@ async def stream(ws: WebSocket, rid: str, speed: float = 1.0, seconds: float = 2
         except Exception:
             pass
 
+
+# serve the REAL generated figures (docs/figures/*.png) to the Results page
+from silentguard.config import resolve as _resolve  # noqa: E402
+FIGURES = _resolve("docs/figures")
+if FIGURES.exists():
+    app.mount("/figures", StaticFiles(directory=str(FIGURES)), name="figures")
 
 # static proof page (plain: canvas ECG + live verdict, no 3D)
 if STATIC.exists():
