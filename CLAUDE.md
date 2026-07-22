@@ -105,13 +105,14 @@ docs/            roadmap + title page
 4. [x] `features/waveform_features.py` — beat detection + HR/RR + cross-signal agreement.
 5. [x] `models/baseline.py` — RandomForest/XGBoost on features, 5-fold CV, challenge score.  <-- REVIEW 1 target (DONE)
 6. [ ] `models/cnn.py` — 1D-CNN on raw waveforms; then attention CNN-LSTM. (optional / later)
-7. [ ] `models/safety.py` — SUPPRESS/KEEP/DEFER thresholds; sensitivity floor >= 99%.        <-- REVIEW 2 target
-8. [ ] `models/domain.py` — Leave-One-Arrhythmia-Out (LOAO) generalization; report the gap (C1). <-- REVIEW 3 headline
+7. [x] `models/safety.py` — SUPPRESS/KEEP/DEFER thresholds; sensitivity floor >= 99%.        <-- REVIEW 2 target (DONE)
+8. [x] `models/domain.py` — Leave-One-Arrhythmia-Out (LOAO) generalization; report the gap (C1). <-- REVIEW 3 headline (DONE)
        (LOSO not feasible — no source tags in headers; see NOVELTY.md §2.)
-9. [ ] adaptive-latency layer: per-alarm wait; latency-vs-sensitivity curve (C2).
+9. [~] adaptive-latency: `choose_latency()` + tests DONE; latency-vs-sensitivity CURVE needs the
+       deep/streaming model (per-alarm re-scoring over growing windows) — deferred to step 6.
 10.[ ] (was few-shot local calibration — DROPPED with VTaC; future work.)
-11.[ ] `explain/explain.py` — SHAP + calibration (reliability curve + ECE) (C3).
-12.[ ] `service/` + `web/` — the live-triage product (retrofit, edge-friendly, multilingual UI).
+11.[x] `explain/explain.py` — SHAP + calibration (reliability curve + ECE) (C3). (waveform/attention deferred to step 6)
+12.[ ] `service/` + `web/` — the live-triage product (retrofit, edge-friendly, multilingual UI).  <-- NEXT SESSION
 
 ## Definition of done (per component)
 - A function has: type hints, a docstring, and a matching smoke test.
@@ -119,30 +120,38 @@ docs/            roadmap + title page
 - Every reported number states the dataset, the split (CV fold or benchmark split), and the metric.
 
 ## Current status
-**Baseline engine working end-to-end (build steps 1–5 done; Review-1 target met).**
-Pipeline: load CinC-2015 record → preprocess (baseline removal + 0.5–40 Hz bandpass +
-robust normalize) → 33 handcrafted features (4 SQIs, HR/RR stats + pauses, ECG-vs-pulse
-cross-signal agreement, channel flags, alarm-type one-hot) → RF & XGBoost with class
-weighting → 5-fold CV with **nested-CV threshold selection** (threshold picked on inner-CV
-OOF probs of each training fold only — leak-free; lands near the Bayes-optimal ~1/6 for the
-5×FN cost).
+**Single-dataset project (CinC-2015 only). Build steps 1–5, 7, 8, 11 done; Reviews 1–3
+targets met. Steps 6 (deep model), 12 (product) remain.** Two runnable entrypoints:
+- `python scripts/02_train_baseline.py` — in-distribution RF/XGB baseline (E1).
+- `python scripts/03_generalization.py` — LOAO generalization + safety + one explanation.
+Features cache: `data/interim/challenge2015_features.csv`. Results CSVs in `data/processed/`.
 
-Run: `python scripts/02_train_baseline.py` (features cached to
-`data/interim/challenge2015_features.csv`; summary → `data/processed/baseline_cv_results.csv`).
-
-**Results (5-fold CV on the 750 public records — the 500-record test set is hidden):**
+**E1 — in-distribution 5-fold CV (750 public records; hidden 500-test unavailable):**
 | model | challenge score | true-alarm sens. | specificity | ROC-AUC |
 |-------|-----------------|------------------|-------------|---------|
 | XGBoost | **0.662** | 0.929 | 0.612 | 0.897 |
 | RandomForest | 0.635 | 0.895 | 0.640 | 0.897 |
+Per-type (XGB): TACHY easy (0.94/AUROC 0.98); VTACH hardest in-distribution (0.57/0.80).
 
-Per-type (XGB): TACHY easy (score 0.94, AUROC 0.98); **VTACH hardest (score 0.57, AUROC 0.80)**
-— matches the 2015 paper's finding that VT alarms defeated everyone. ASYSTOLE also weak
-(AUROC 0.79), likely beat-detection struggling on flatline/noise.
+**C1 — LOAO generalization (RF, physiological features; the headline result):**
+Pooled score **0.290** (vs 0.635 in-distribution → **gap −0.345**); pooled true-sens 0.45.
+Per held-out type: ASYSTOLE 0.60 (generalizes BEST, +0.08), VFIB 0.52, VTACH 0.37, BRADY 0.23,
+**TACHY 0.11 — worst, AUROC 0.375 (inverted ranking): a model never trained on tachycardia
+wrongly suppresses tachy alarms because the other four types are false-dominated.**
+LOSO (C1b): NOT feasible (no source tags in headers).
 
-**Env note:** venv at `.venv/` (torch/shap/fastapi NOT installed yet — added when steps 6/11/12
-need them). `pip install -e .` done. Data lives at `data/raw/challenge-2015/training/` (750
-`.hea`+`.mat` records, unzipped from the PhysioNet download).
+**C2 — safety layer (RF, thresholds on 5-fold OOF):** at true-sens **0.993 ≥ 0.99 floor**,
+suppresses **7.9%** of false alarms (36/456), **defer rate 0.77** (KEEP 137 / SUPPRESS 38 /
+DEFER 575). High defer is the honest cost of a 99% floor with a 0.90-AUROC baseline → motivates
+the deep model. `choose_latency()` implemented+tested (latency curve needs the streaming model).
 
-**Next:** build step 6 (1D-CNN / attention on raw waveforms) to close the gap to published
-entries (~0.75–0.84), focusing on the hard VTACH/ASYSTOLE/VFIB types; then step 7 (safety layer).
+**C3 — trust:** SHAP top-reasons per alarm (e.g. a suppressed false asystole → "beats present:
+n_beats/hr_mean push away from TRUE; high baseline-wander SQI"); calibration ECE ≈ 0.08.
+
+**Env note:** venv at `.venv/`; installed: core + sklearn/xgboost + **shap + matplotlib**.
+torch/fastapi NOT installed (added when steps 6/12 need them). `pip install -e .` done.
+Data at `data/raw/challenge-2015/training/` (750 `.hea`+`.mat`). VTaC dropped (won't download).
+
+**Next:** step 6 (1D-CNN / attention) to lift AUROC on the hard types — this is what would let the
+safety layer suppress far more than 7.9% at the 99% floor, and would enable the latency curve and
+waveform/attention explanations. Then step 12 (service/ + web/ product). **Website = next session.**
