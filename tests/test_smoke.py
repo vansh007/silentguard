@@ -173,6 +173,46 @@ def test_calibration_ece_bounds():
     assert len(out["bin_centers"]) == 5
 
 
+def test_deep_model_trains_and_predicts():
+    """CNN + attention models build, train a few epochs, and expose attention weights."""
+    torch = __import__("importlib").util.find_spec("torch")
+    if torch is None:
+        import pytest
+        pytest.skip("torch not installed")
+    import numpy as np
+    from silentguard.config import load_config
+    from silentguard.models.cnn import train_deep, predict_proba_deep, attention_weights
+    cfg = load_config()
+    rng = np.random.default_rng(0)
+    n, C, T = 48, 3, 500
+    y = np.array([1, 0] * (n // 2))
+    # class-dependent bump so the tiny net has something to learn
+    X = rng.normal(size=(n, C, T)).astype("float32")
+    X[y == 1, 0, 100:150] += 3.0
+    for arch in ("cnn", "attn"):
+        model, val_p = train_deep(X[:32], y[:32], X[32:], y[32:], cfg, arch=arch, max_epochs=3, patience=3)
+        p = predict_proba_deep(model, X)
+        assert p.shape == (n,) and np.all((p >= 0) & (p <= 1))
+    aw = attention_weights(model, X[0])       # attn model from the loop
+    assert aw is not None and abs(float(aw.sum()) - 1.0) < 1e-4
+
+
+def test_waveform_tensor_shape_if_data_present():
+    """If the dataset is present, the waveform tensor has the right shape and is bounded."""
+    from pathlib import Path
+    from silentguard.config import load_config, resolve
+    cfg = load_config()
+    if not (resolve(cfg["paths"]["challenge_2015"]) / "training").exists():
+        import pytest
+        pytest.skip("dataset not present")
+    from silentguard.models.cnn import build_waveform_tensor
+    X, y, g, ids = build_waveform_tensor(cfg)
+    T = int(cfg["signal"]["window_seconds"] * cfg["signal"]["fs"])
+    assert X.shape[1] == 3 and X.shape[2] == T
+    assert abs(X).max() <= 8.0 + 1e-5     # clipped to a sane z-range
+    assert len(y) == X.shape[0]
+
+
 def test_explain_features_returns_topk():
     """explain_features returns k signed (name, value) reasons (fallback path is fine)."""
     from silentguard.config import load_config
