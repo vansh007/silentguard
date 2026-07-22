@@ -111,3 +111,79 @@ def test_cross_validate_runs_small():
     m = res["metrics"]
     assert 0.0 <= m["challenge_score"] <= 1.0
     assert 0.0 <= m["sensitivity"] <= 1.0
+
+
+def test_loao_runs_and_holds_out_each_group():
+    """LOAO evaluates every arrhythmia as an unseen held-out type."""
+    from silentguard.config import load_config
+    from silentguard.models.domain import leave_one_arrhythmia_out
+    cfg = load_config()
+    rng = np.random.default_rng(2)
+    codes = ["ASYSTOLE", "BRADY", "TACHY", "VTACH", "VFIB"]
+    groups = np.repeat(codes, 24)
+    y = rng.integers(0, 2, size=len(groups))
+    X = rng.normal(size=(len(groups), 6)) + y[:, None] * 0.5
+    res = leave_one_arrhythmia_out(X, y, groups, cfg, kind="rf")
+    assert set(res["per_group"]) == set(codes)     # each type held out exactly once
+    for m in res["per_group"].values():
+        assert 0.0 <= m["challenge_score"] <= 1.0
+    assert 0.0 <= res["pooled"]["challenge_score"] <= 1.0
+
+
+def test_loso_not_feasible():
+    from silentguard.models.domain import leave_one_source_out, source_tags_available
+    assert source_tags_available(None) is False
+    r = leave_one_source_out()
+    assert r["feasible"] is False and "no" in r["reason"].lower()
+
+
+def test_safety_decide_zones_and_floor():
+    """SUPPRESS/KEEP/DEFER map correctly, and calibration meets the sensitivity floor."""
+    from silentguard.models.safety import decide, Decision, calibrate_thresholds, safety_report
+    assert decide(0.95, 0.9, 0.1) == Decision.SUPPRESS
+    assert decide(0.05, 0.9, 0.1) == Decision.KEEP
+    assert decide(0.50, 0.9, 0.1) == Decision.DEFER
+    rng = np.random.default_rng(3)
+    y = np.array([1] * 100 + [0] * 100)
+    # true alarms tend low p_false, false alarms tend high — with overlap
+    p_false = np.concatenate([rng.uniform(0.0, 0.7, 100), rng.uniform(0.3, 1.0, 100)])
+    cfg = {"safety": {"min_true_sensitivity": 0.99}}
+    th = calibrate_thresholds(p_false, y, cfg)
+    assert th["t_low"] <= th["t_high"]
+    rep = safety_report(p_false, y, th["t_high"], th["t_low"])
+    assert rep["true_alarm_sensitivity"] >= 0.99 - 1e-9   # floor enforced on validation
+
+
+def test_choose_latency_stops_when_confident():
+    from silentguard.models.safety import choose_latency
+    # p_false crosses t_high at t=8s -> should stop there, not wait 30
+    seq = [(0, 0.5), (4, 0.6), (8, 0.95), (12, 0.97)]
+    assert choose_latency(seq, t_high=0.9, t_low=0.1, max_wait_s=30) == 8
+    # never confident -> waits to max
+    seq2 = [(0, 0.5), (10, 0.5), (30, 0.5)]
+    assert choose_latency(seq2, t_high=0.9, t_low=0.1, max_wait_s=30) == 30
+
+
+def test_calibration_ece_bounds():
+    from silentguard.explain.explain import calibration_curve_ece
+    y = np.array([1, 1, 0, 0, 1, 0])
+    p = np.array([0.9, 0.8, 0.1, 0.2, 0.6, 0.4])
+    out = calibration_curve_ece(y, p, n_bins=5)
+    assert 0.0 <= out["ece"] <= 1.0
+    assert len(out["bin_centers"]) == 5
+
+
+def test_explain_features_returns_topk():
+    """explain_features returns k signed (name, value) reasons (fallback path is fine)."""
+    from silentguard.config import load_config
+    from silentguard.models.baseline import build_model
+    from silentguard.explain.explain import explain_features
+    cfg = load_config()
+    rng = np.random.default_rng(4)
+    names = [f"f{i}" for i in range(5)]
+    y = rng.integers(0, 2, size=80)
+    X = rng.normal(size=(80, 5)) + y[:, None]
+    model = build_model("rf", cfg).fit(X, y)
+    reasons = explain_features(model, X[0], names, k=3)
+    assert len(reasons) == 3
+    assert all(isinstance(n, str) for n, _ in reasons)
