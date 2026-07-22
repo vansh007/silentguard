@@ -104,7 +104,7 @@ docs/            roadmap + title page
 3. [x] `features/sqi.py` — at least one signal-quality index (e.g., bSQI).
 4. [x] `features/waveform_features.py` — beat detection + HR/RR + cross-signal agreement.
 5. [x] `models/baseline.py` — RandomForest/XGBoost on features, 5-fold CV, challenge score.  <-- REVIEW 1 target (DONE)
-6. [ ] `models/cnn.py` — 1D-CNN on raw waveforms; then attention CNN-LSTM. (optional / later)
+6. [x] `models/cnn.py` — 1D-CNN + attention CNN-LSTM on raw waveforms; RF+CNN ensemble is best.
 7. [x] `models/safety.py` — SUPPRESS/KEEP/DEFER thresholds; sensitivity floor >= 99%.        <-- REVIEW 2 target (DONE)
 8. [x] `models/domain.py` — Leave-One-Arrhythmia-Out (LOAO) generalization; report the gap (C1). <-- REVIEW 3 headline (DONE)
        (LOSO not feasible — no source tags in headers; see NOVELTY.md §2.)
@@ -140,18 +140,36 @@ Per held-out type: ASYSTOLE 0.60 (generalizes BEST, +0.08), VFIB 0.52, VTACH 0.3
 wrongly suppresses tachy alarms because the other four types are false-dominated.**
 LOSO (C1b): NOT feasible (no source tags in headers).
 
-**C2 — safety layer (RF, thresholds on 5-fold OOF):** at true-sens **0.993 ≥ 0.99 floor**,
-suppresses **7.9%** of false alarms (36/456), **defer rate 0.77** (KEEP 137 / SUPPRESS 38 /
-DEFER 575). High defer is the honest cost of a 99% floor with a 0.90-AUROC baseline → motivates
-the deep model. `choose_latency()` implemented+tested (latency curve needs the streaming model).
+**Step 6 — deep model (`scripts/04_deep_model.py`, torch installed):** 1D-CNN + attention
+CNN-LSTM on the raw 3-channel waveform (fixed [ECG1, ECG2, pulse] tensor, values clipped to ±8
+— robust-normalize can explode on flat signals; that bug silently broke training until fixed).
+**Deep models alone do NOT beat RF** (small data: CNN AUROC 0.846, attn 0.775 < RF 0.897), and
+alone they *defer more* (0.91). **But RF+CNN are complementary — the equal-weight ensemble wins:**
+| model | in-dist score | AUROC | LOAO pooled | safety FA-supp @99% | defer |
+|-------|--------------|-------|-------------|---------------------|-------|
+| RandomForest | 0.635 | 0.897 | 0.290 | 0.079 | 0.767 |
+| 1D-CNN | 0.611 | 0.846 | 0.290 | 0.086 | 0.912 |
+| Attn-CNN-LSTM | 0.486 | 0.775 | 0.253 | 0.053 | 0.919 |
+| **RF+CNN ensemble** | **0.729** | **0.920** | **0.484** | **0.276** | **0.643** |
+Fair (identical-protocol) comparisons = AUROC and the safety operating point (both calibrated the
+same way for every model). **Answer to "does better AUROC let us defer less?": YES via the
+ensemble — AUROC 0.897→0.920 lifts FA-suppression 7.9%→27.6% and cuts defer 0.767→0.643 at the
+same ≥99% floor.** (Ensemble challenge-score rows use an OOF-set threshold → treat as indicative;
+AUROC + safety are the rigorous numbers.)
+
+**C2 — safety layer (thresholds on 5-fold OOF, identical for every model):** all models hold
+true-sens **0.993 ≥ 0.99 floor**; see table above for FA-suppression/defer. `choose_latency()`
+implemented+tested (latency-vs-sensitivity curve still needs a streaming/growing-window model).
 
 **C3 — trust:** SHAP top-reasons per alarm (e.g. a suppressed false asystole → "beats present:
 n_beats/hr_mean push away from TRUE; high baseline-wander SQI"); calibration ECE ≈ 0.08.
 
-**Env note:** venv at `.venv/`; installed: core + sklearn/xgboost + **shap + matplotlib**.
-torch/fastapi NOT installed (added when steps 6/12 need them). `pip install -e .` done.
-Data at `data/raw/challenge-2015/training/` (750 `.hea`+`.mat`). VTaC dropped (won't download).
+**Env note:** venv at `.venv/`; installed: core + sklearn/xgboost + shap + matplotlib + **torch 2.13**.
+fastapi NOT installed (added at step 12). `pip install -e .` done. Data at
+`data/raw/challenge-2015/training/` (750 `.hea`+`.mat`). Waveform tensor cached at
+`data/interim/challenge2015_waveforms_16s.npz`. VTaC dropped (won't download).
 
-**Next:** step 6 (1D-CNN / attention) to lift AUROC on the hard types — this is what would let the
-safety layer suppress far more than 7.9% at the 99% floor, and would enable the latency curve and
-waveform/attention explanations. Then step 12 (service/ + web/ product). **Website = next session.**
+**Next:** step 12 (service/ + web/ product) — serve the **RF+CNN ensemble** with the safety layer
+and SHAP/attention explanations; retrofit/edge-friendly/multilingual per the India framing.
+Optional research polish: latency-vs-sensitivity curve (needs streaming re-scoring), and making the
+ensemble's LOAO threshold fully leak-free. **Website = next session — do NOT touch service/ or web/.**
