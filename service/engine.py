@@ -124,6 +124,66 @@ def analyze(rid: str) -> dict:
     return out
 
 
+def saliency(rid: str, target: int | None = None, points: int = 400) -> dict:
+    """Where in the waveform the CNN looked — Grad-CAM over the frozen deep model.
+
+    Complements the SHAP feature reasons: SHAP says *which feature*, this says *when*.
+    Downsampled to `points` buckets (max-pooled, so peaks survive) for transport.
+    """
+    from silentguard.explain.saliency import saliency_for_record
+
+    rec = load_record(rid)
+    out = saliency_for_record(rec, model().cnn_model(), CFG, target=target)
+    s = np.asarray(out["saliency"], dtype=float)
+
+    n = max(1, min(int(points), len(s)))
+    edges = np.linspace(0, len(s), n + 1).astype(int)
+    buckets = [float(s[a:b].max()) if b > a else 0.0 for a, b in zip(edges[:-1], edges[1:])]
+
+    return {
+        "record_id": rid,
+        "arrhythmia": rec.arrhythmia,
+        "window_seconds": out["window_seconds"],
+        "fs": out["fs"],
+        "target": out["target"],          # 1 = evidence for TRUE alarm, 0 = for FALSE
+        "p_true": round(out["p_true"], 4),
+        "n_conv_steps": out["n_conv_steps"],
+        "saliency": [round(v, 4) for v in buckets],
+    }
+
+
+def heartbeat(rid: str = "a604s", seconds: float = 16.0) -> dict:
+    """Real inter-beat timing for one record — drives the hero heart's rhythm.
+
+    Returns the QRS times our detector actually found, so the animation beats with a
+    real patient's rhythm instead of a made-up constant rate.
+    """
+    rec = load_record(rid)
+    fs = rec.fs
+    leads = rec.ecg_leads()
+    if not leads:
+        return {"record_id": rid, "bpm": None, "beat_times_s": [], "error": "no ECG lead"}
+
+    clean = normalize(bandpass(remove_baseline_wander(rec.window(seconds, rec.signals[leads[0]]), fs), fs))
+    beats = detect_beats(clean, fs)
+    times = [round(float(b) / fs, 4) for b in beats]
+
+    rr = np.diff(times) if len(times) > 1 else np.array([])
+    rr = rr[(rr > 0.25) & (rr < 3.0)]           # drop physiologically impossible intervals
+    bpm = round(float(60.0 / np.median(rr)), 1) if rr.size else None
+
+    return {
+        "record_id": rid,
+        "arrhythmia": rec.arrhythmia,
+        "true_label": rec.label,
+        "fs": fs,
+        "seconds": seconds,
+        "beat_times_s": times,
+        "bpm": bpm,
+        "n_beats": len(times),
+    }
+
+
 # --- Arrhythmia Explainer: one real TRUE example per alarm type, with clinically-accurate text.
 # The clinical descriptions are standard cardiology facts (education); the ECG + verdict are REAL.
 EXPLAINER = [
@@ -191,4 +251,48 @@ def read_results() -> dict:
         "loao": _rows("loao_pertype.csv"),        # per-arrhythmia LOAO
         "safety": _rows("safety_detail.csv"),     # safety operating points
         "figures": figures,
+    }
+
+
+def oof_predictions() -> dict:
+    """Per-record leak-free predictions for all 750 records (written by make_figures.py).
+
+    This is the raw material behind every published curve. Serving it lets the product
+    recompute the safety operating point live at any threshold the user chooses, on real
+    per-record predictions — rather than showing a picture of one frozen operating point.
+
+    Compact columnar form (arrays, not row dicts) to keep the payload small.
+    """
+    import csv
+
+    p = resolve(CFG["paths"]["processed"]) / "oof_predictions.csv"
+    if not p.exists():
+        return {"available": False, "detail": "run scripts/make_figures.py to generate it",
+                "n": 0, "records": [], "arrhythmia": [], "label": [], "models": {}}
+
+    with open(p) as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return {"available": False, "detail": "empty file", "n": 0,
+                "records": [], "arrhythmia": [], "label": [], "models": {}}
+
+    def col(name, cast=float, nd=4):
+        return [round(cast(r[name]), nd) if r[name] not in ("", "nan") else None for r in rows]
+
+    models = {}
+    for k in ("rf", "cnn", "ens"):
+        models[k] = {
+            "p_true_indist": col(f"p_true_indist_{k}"),
+            "p_true_loao": col(f"p_true_loao_{k}"),
+        }
+
+    return {
+        "available": True,
+        "n": len(rows),
+        "records": [r["record_id"] for r in rows],
+        "arrhythmia": [r["arrhythmia"] for r in rows],
+        "label": [int(r["label"]) for r in rows],   # 1 = TRUE alarm, 0 = FALSE
+        "models": models,
+        "note": ("Leak-free 5-fold CV (indist) and Leave-One-Arrhythmia-Out (loao) "
+                 "out-of-fold P(true alarm) per record, 750 public CinC-2015 records."),
     }

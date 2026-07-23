@@ -165,6 +165,10 @@ class FrozenEnsemble:
             self._cnn = m
         return self._cnn
 
+    def cnn_model(self):
+        """The reconstructed torch module (public accessor, e.g. for Grad-CAM saliency)."""
+        return self._cnn_model()
+
     def _features_row(self, rec) -> np.ndarray:
         from ..features.waveform_features import extract_feature_vector
         feats = extract_feature_vector(rec, self.cfg)

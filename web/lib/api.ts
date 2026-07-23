@@ -135,3 +135,60 @@ export async function fetchHealth(): Promise<Health> {
   if (!r.ok) throw new Error(`health ${r.status}`);
   return (await r.json()) as Health;
 }
+
+// ---- Per-record leak-free predictions (powers the interactive safety dial) ----
+export interface OofData {
+  available: boolean;
+  detail?: string;
+  n: number;
+  records: string[];
+  arrhythmia: string[];
+  label: number[]; // 1 = TRUE alarm, 0 = FALSE
+  models: Record<string, { p_true_indist: (number | null)[]; p_true_loao: (number | null)[] }>;
+  note?: string;
+}
+
+export async function fetchOof(): Promise<OofData> {
+  const r = await fetch(`${API_BASE}/api/oof`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`oof ${r.status}`);
+  return (await r.json()) as OofData;
+}
+
+// ---- Grad-CAM temporal saliency (where the CNN looked) ----
+export interface SaliencyData {
+  record_id: string;
+  arrhythmia: string | null;
+  window_seconds: number;
+  fs: number;
+  target: number; // 1 = evidence for TRUE alarm, 0 = for FALSE
+  p_true: number;
+  n_conv_steps: number;
+  saliency: number[]; // 0..1, evenly spaced across the analysis window
+}
+
+export async function fetchSaliency(id: string, points = 400): Promise<SaliencyData> {
+  const r = await fetch(`${API_BASE}/api/records/${id}/saliency?points=${points}`, {
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`saliency ${r.status}`);
+  return (await r.json()) as SaliencyData;
+}
+
+// ---- Real QRS timing (drives the hero heart's rhythm) ----
+export interface HeartbeatData {
+  record_id: string;
+  arrhythmia?: string | null;
+  true_label?: 0 | 1 | null;
+  fs: number;
+  seconds: number;
+  beat_times_s: number[];
+  bpm: number | null;
+  n_beats: number;
+  error?: string;
+}
+
+export async function fetchHeartbeat(record = "a604s"): Promise<HeartbeatData> {
+  const r = await fetch(`${API_BASE}/api/heartbeat?record=${record}`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`heartbeat ${r.status}`);
+  return (await r.json()) as HeartbeatData;
+}

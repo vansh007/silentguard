@@ -11,7 +11,9 @@ import { cn, Dot } from "./ui";
 const LINKS = [
   { href: "/", label: "Home" },
   { href: "/monitor", label: "Live Monitor" },
+  { href: "/ward", label: "Ward" },
   { href: "/explainer", label: "Explainer" },
+  { href: "/research", label: "Research" },
   { href: "/results", label: "Results" },
 ];
 

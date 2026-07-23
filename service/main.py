@@ -9,6 +9,9 @@ Endpoints
   GET  /api/records/{id}               record metadata (channels, fs, duration, ground truth)
   GET  /api/records/{id}/waveform      real display samples + REAL QRS beats
   GET  /api/records/{id}/analysis      the REAL engine decision bundle
+  GET  /api/records/{id}/saliency      Grad-CAM: WHERE in the waveform the CNN looked
+  GET  /api/heartbeat                  real QRS timing for one record (drives the hero heart)
+  GET  /api/oof                        per-record leak-free predictions for all 750 records
   WS   /ws/stream/{id}                 streams the pre-alarm waveform in real time, then the verdict
   GET  /                               a plain proof page (canvas ECG + live verdict; no 3D)
 
@@ -86,6 +89,26 @@ def analysis(rid: str):
         raise HTTPException(404, str(e))
 
 
+@app.get("/api/records/{rid}/saliency")
+def saliency(rid: str, target: int | None = None, points: int = 400):
+    """Grad-CAM over the frozen 1-D CNN: where in the analysis window the model looked."""
+    try:
+        return engine.saliency(rid, target=target, points=points)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.get("/api/heartbeat")
+def heartbeat(record: str = "a604s", seconds: float = 16.0):
+    """Real QRS timing for one record, so animations can beat with a real patient's rhythm."""
+    try:
+        return engine.heartbeat(record, seconds=seconds)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
 @app.get("/api/explainer")
 def explainer():
     """One real teaching example per arrhythmia type (clinical text + live engine verdict)."""
@@ -96,6 +119,12 @@ def explainer():
 def results():
     """The REAL leak-free results (from the CSVs) + the list of available figures."""
     return engine.read_results()
+
+
+@app.get("/api/oof")
+def oof():
+    """Per-record leak-free out-of-fold predictions — powers the interactive safety dial."""
+    return engine.oof_predictions()
 
 
 @app.websocket("/ws/stream/{rid}")

@@ -197,8 +197,21 @@ def main():
         sdet.append(r)
     pd.DataFrame(sdet).to_csv(procdir / "safety_detail.csv", index=False)
 
+    # ---- per-record leak-free predictions -------------------------------------------
+    # These are the raw material behind every curve above. Persisting them lets the
+    # product recompute the safety operating point (and the LOAO collapse) live at any
+    # threshold the user picks, on real per-record predictions rather than a redrawn
+    # picture of one frozen operating point.
+    oof = pd.DataFrame({
+        "record_id": df["record_id"], "arrhythmia": df["arrhythmia"], "label": y,
+    })
+    for k in ("rf", "cnn", "ens"):
+        oof[f"p_true_indist_{k}"] = cv[k]["oof_proba"]
+        oof[f"p_true_loao_{k}"] = lo[k]["pooled_proba"]
+    oof.to_csv(procdir / "oof_predictions.csv", index=False)
+
     print("Wrote figures ->", figdir)
-    print("Wrote data/processed/loao_pertype.csv and safety_detail.csv")
+    print("Wrote data/processed/loao_pertype.csv, safety_detail.csv, oof_predictions.csv")
     print(f"(explanation figure uses record {rid})")
 
 
