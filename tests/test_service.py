@@ -67,3 +67,56 @@ def test_read_results_returns_real_rows_when_present():
     if r["available"]:
         assert any(row["model"] == "RF+CNN ensemble" for row in r["summary"])
         assert all("challenge_score" in row for row in r["loao"])
+
+
+def test_saliency_is_real_and_normalized():
+    """Grad-CAM returns a 0..1 importance curve over the CNN's analysis window."""
+    from service import engine
+    out = engine.saliency(DEMO, points=64)
+    s = out["saliency"]
+    assert len(s) == 64
+    assert all(0.0 <= v <= 1.0 for v in s)
+    assert max(s) > 0.0                      # a flat-zero map would mean no gradient reached
+    assert out["target"] in (0, 1)
+    assert out["window_seconds"] == cfg["signal"]["window_seconds"]
+    assert out["n_conv_steps"] >= 2          # the pooled feature map must have real extent
+
+
+def test_heartbeat_reports_real_detected_beats():
+    """The hero animation's rhythm comes from our detector, not a constant."""
+    from service import engine
+    hb = engine.heartbeat(DEMO)
+    assert hb["n_beats"] == len(hb["beat_times_s"]) > 2
+    assert hb["beat_times_s"] == sorted(hb["beat_times_s"])
+    assert all(0 <= t <= hb["seconds"] for t in hb["beat_times_s"])
+    assert 20 < hb["bpm"] < 250              # a physiologically sane rate
+
+
+def test_oof_predictions_match_the_published_operating_point():
+    """The per-record predictions served to the safety dial reproduce safety_detail.csv.
+
+    This is the Python side of the parity guarantee that scripts/check_ts_parity.mjs
+    checks for the TypeScript port: same predictions in, same operating point out.
+    """
+    import csv
+    import numpy as np
+    from silentguard.models import safety
+    from service import engine
+
+    d = engine.oof_predictions()
+    if not d["available"]:
+        pytest.skip("run scripts/make_figures.py to generate oof_predictions.csv")
+
+    detail = resolve(cfg["paths"]["processed"]) / "safety_detail.csv"
+    if not detail.exists():
+        pytest.skip("safety_detail.csv not generated")
+    published = {r["model"]: r for r in csv.DictReader(open(detail))}
+
+    y = np.array(d["label"])
+    for key, name in (("rf", "RandomForest"), ("cnn", "1D-CNN"), ("ens", "RF+CNN ensemble")):
+        p_false = 1.0 - np.array(d["models"][key]["p_true_indist"], dtype=float)
+        th = safety.calibrate_thresholds(p_false, y, cfg)
+        rep = safety.safety_report(p_false, y, th["t_high"], th["t_low"])
+        assert rep["n_suppress"] == int(published[name]["n_suppress"])
+        assert abs(rep["false_alarm_suppression"]
+                   - float(published[name]["false_alarm_suppression"])) < 1e-6

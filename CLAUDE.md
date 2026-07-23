@@ -112,7 +112,7 @@ docs/            roadmap + title page
        deep/streaming model (per-alarm re-scoring over growing windows) — deferred to step 6.
 10.[ ] (was few-shot local calibration — DROPPED with VTaC; future work.)
 11.[x] `explain/explain.py` — SHAP + calibration (reliability curve + ECE) (C3). (waveform/attention deferred to step 6)
-12.[ ] `service/` + `web/` — the live-triage product (retrofit, edge-friendly, multilingual UI).  <-- NEXT SESSION
+12.[x] `service/` + `web/` — the live-triage product (retrofit, edge-friendly, multilingual UI).
 
 ## Definition of done (per component)
 - A function has: type hints, a docstring, and a matching smoke test.
@@ -120,8 +120,9 @@ docs/            roadmap + title page
 - Every reported number states the dataset, the split (CV fold or benchmark split), and the metric.
 
 ## Current status
-**Single-dataset project (CinC-2015 only). Build steps 1–8, 11 done; Reviews 1–3 met. FINAL
-ENGINE FROZEN (RF+CNN ensemble). Only step 12 (product/website) remains.** Runnable entrypoints:
+**Single-dataset project (CinC-2015 only). ALL build steps 1–12 done; Reviews 1–3 met. FINAL
+ENGINE FROZEN (RF+CNN ensemble). Product (service/ + web/) shipped — see "Product" below.**
+Runnable entrypoints:
 - `scripts/02_train_baseline.py` — RF/XGB feature baseline (E1). `03_generalization.py` — RF
   LOAO + safety + explanation. `04_deep_model.py` — RF vs CNN vs attention per-arch comparison.
 - **`scripts/05_freeze_ensemble.py`** — the deliverable: leak-free same-protocol eval, calibrates
@@ -166,11 +167,42 @@ returns `{p_false, decision (SUPPRESS/KEEP/DEFER), confidence, reasons, latency_
 ensemble_meta.json) are git-ignored — regenerate with `scripts/05_freeze_ensemble.py`.
 
 **Env note:** venv at `.venv/`; installed: core + sklearn/xgboost + shap + matplotlib + **torch 2.13**.
-fastapi NOT installed (added at step 12). `pip install -e .` done. Data at
+fastapi + uvicorn installed (step 12). `pip install -e .` done. Data at
 `data/raw/challenge-2015/training/` (750 `.hea`+`.mat`). Waveform tensor cached at
 `data/interim/challenge2015_waveforms_16s.npz`. VTaC dropped (won't download).
 
-**Next:** step 12 (service/ + web/ product) — serve the **RF+CNN ensemble** with the safety layer
-and SHAP/attention explanations; retrofit/edge-friendly/multilingual per the India framing.
-Optional research polish: latency-vs-sensitivity curve (needs streaming re-scoring), and making the
-ensemble's LOAO threshold fully leak-free. **Website = next session — do NOT touch service/ or web/.**
+## Product (step 12 — DONE)
+`service/` (FastAPI, frozen ensemble) + `web/` (Next.js 14). Run both:
+`.venv/bin/uvicorn service.main:app --port 8000` and `cd web && npm run dev`.
+
+**Pages:** `/` (story + live stats), `/monitor` (single-alarm triage w/ Grad-CAM overlay),
+`/ward` (6 beds streaming at once + session tally), `/explainer` (5 alarm types on real
+records, ECG<->anatomy teaching), **`/research`** (interactive safety dial + LOAO explorer),
+`/results` (tables, figures, limitations).
+
+**API:** `/health`, `/api/records`, `/api/records/{id}/{waveform,analysis,saliency}`,
+`/api/explainer`, `/api/results`, **`/api/oof`**, **`/api/heartbeat`**, `WS /ws/stream/{id}`.
+
+**New engine pieces this step:**
+- `explain/saliency.py` — Grad-CAM over the frozen Conv1DNet (exact, since the global-avg-pool
+  sits directly on the last feature map). Answers *where* in the waveform; SHAP answers *which
+  feature*. This is the C3 "attention/Grad-CAM once the deep model lands" commitment.
+- `make_figures.py` now persists **`data/processed/oof_predictions.csv`** — per-record leak-free
+  OOF P(true) for RF/CNN/ensemble under both 5-fold CV and LOAO. Serving it lets the product
+  recompute real operating points live instead of showing a picture of one.
+- `web/lib/safety.ts` is a faithful port of `models/safety.py`; **`scripts/check_ts_parity.mjs`**
+  asserts it reproduces the Python engine to 1e-9 on all three models. Keep them in sync.
+- `/api/oof` deliberately serves UNROUNDED probabilities: thresholds are themselves observed
+  probabilities, so rounding moves records across the cutoff (it shifted n_suppress by 1).
+
+**Honesty invariants the product must keep:** no fabricated numbers anywhere (loading states
+show skeletons); ground truth revealed only after a verdict; the "research prototype, not a
+cleared medical device" banner stays; the hero heart beats on record a163l's REAL detected QRS
+timing and says so; schematics (PQRST primer, heart anatomy) are labelled "not patient data".
+
+**Deployment:** see `docs/DEPLOY.md`. NOT deployed — a public API re-hosts CinC-2015 waveforms,
+which the data policy above forbids without an explicit owner decision. Dockerfile + .dockerignore
+are ready for the 12 curated demo records (~7 MB) if that call is made.
+
+**Remaining optional research polish:** latency-vs-sensitivity curve (needs streaming re-scoring),
+and making the ensemble's LOAO threshold fully leak-free.

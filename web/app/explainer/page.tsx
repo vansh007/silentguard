@@ -1,5 +1,6 @@
 import Explainer from "@/components/Explainer";
 import EcgPrimer from "@/components/explainer/EcgPrimer";
+import HeartLink from "@/components/explainer/HeartLink";
 import PageHeader from "@/components/PageHeader";
 
 export default function ExplainerPage() {
@@ -16,6 +17,7 @@ export default function ExplainerPage() {
         heartbeat&apos;s ventricular contraction.
       </PageHeader>
 
+      <HeartLink />
       <EcgPrimer />
       <Explainer />
     </main>

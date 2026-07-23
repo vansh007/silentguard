@@ -29,8 +29,16 @@ from fastapi.staticfiles import StaticFiles
 from . import engine
 
 app = FastAPI(title="SilentGuard API", version="0.1.0")
+
+# Local development is wide open; a real deployment should pin the frontend origin via
+# SILENTGUARD_ALLOWED_ORIGINS (comma-separated). See docs/DEPLOY.md.
+import os  # noqa: E402
+_origins = os.environ.get("SILENTGUARD_ALLOWED_ORIGINS", "*")
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=["*"] if _origins.strip() == "*" else [o.strip() for o in _origins.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 STATIC = Path(__file__).parent / "static"

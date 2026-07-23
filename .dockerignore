@@ -1,0 +1,30 @@
+# Keep the API image small and keep bulk patient data out of it by default.
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+notebooks/
+paper/
+tests/
+web/node_modules
+web/.next
+
+# the full 417 MB corpus and cached tensors never belong in an image
+data/raw/**
+data/interim/**
+
+# re-admit ONLY the curated demo records the product actually streams.
+# Keep this list in sync with service/engine.py::DEMO_RECORDS + EXPLAINER.
+!data/raw/challenge-2015/training/v338s.*
+!data/raw/challenge-2015/training/a163l.*
+!data/raw/challenge-2015/training/b215l.*
+!data/raw/challenge-2015/training/t384s.*
+!data/raw/challenge-2015/training/v334s.*
+!data/raw/challenge-2015/training/t156s.*
+!data/raw/challenge-2015/training/a604s.*
+!data/raw/challenge-2015/training/b537l.*
+!data/raw/challenge-2015/training/a705l.*
+!data/raw/challenge-2015/training/f346s.*
+!data/raw/challenge-2015/training/f543l.*
+!data/raw/challenge-2015/training/v652s.*

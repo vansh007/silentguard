@@ -276,8 +276,11 @@ def oof_predictions() -> dict:
         return {"available": False, "detail": "empty file", "n": 0,
                 "records": [], "arrhythmia": [], "label": [], "models": {}}
 
-    def col(name, cast=float, nd=4):
-        return [round(cast(r[name]), nd) if r[name] not in ("", "nan") else None for r in rows]
+    def col(name, cast=float):
+        # NOT rounded: the safety thresholds are themselves observed probabilities, so a
+        # rounded payload can move a record across the cutoff and shift the operating
+        # point by a record. Fidelity beats a few kB here.
+        return [cast(r[name]) if r[name] not in ("", "nan") else None for r in rows]
 
     models = {}
     for k in ("rf", "cnn", "ens"):
