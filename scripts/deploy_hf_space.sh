@@ -11,7 +11,7 @@
 #
 # Prerequisites:
 #   1. Create the Space at https://huggingface.co/new-space  (SDK: Docker, hardware: CPU basic)
-#   2. huggingface-cli login      (or have a write token ready when git prompts)
+#   2. hf auth login      (or have a write token ready when git prompts)
 #   3. Artifacts built locally:
 #        .venv/bin/python scripts/05_freeze_ensemble.py
 #        .venv/bin/python scripts/make_figures.py
@@ -98,14 +98,27 @@ fi
 # --- push ------------------------------------------------------------------------------
 cd "$STAGE"
 git init -q
-git lfs install --local 2>/dev/null || true
-# .mat waveforms are binary; HF wants anything sizeable in LFS
-cat > .gitattributes <<'EOF'
+
+# HF only *requires* LFS above 10 MB and our largest artifact is ~5 MB, so LFS is
+# optional here. Use it when it is available (nicer for binaries), skip it otherwise
+# rather than making git-lfs a hard prerequisite.
+BIG="$(find . -type f -size +10M -not -path './.git/*' | head -5)"
+if command -v git-lfs >/dev/null 2>&1; then
+  git lfs install --local >/dev/null 2>&1 || true
+  cat > .gitattributes <<'EOF'
 *.mat filter=lfs diff=lfs merge=lfs -text
 *.joblib filter=lfs diff=lfs merge=lfs -text
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
 EOF
+elif [[ -n "$BIG" ]]; then
+  echo "ERROR: files over 10 MB need git-lfs, which is not installed:" >&2
+  echo "$BIG" >&2
+  echo "Install it (brew install git-lfs) and re-run." >&2
+  exit 1
+else
+  echo "git-lfs not installed — not needed here (largest file is under 10 MB)."
+fi
 git add -A
 git -c user.email=deploy@silentguard -c user.name=silentguard-deploy \
     commit -qm "Deploy SilentGuard API (frozen RF+CNN ensemble)"

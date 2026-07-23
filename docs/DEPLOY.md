@@ -58,7 +58,7 @@ The frozen model and result files are git-ignored, so regenerate them before dep
 ## Step 2 — Backend on Hugging Face Spaces
 
 1. Create the Space: <https://huggingface.co/new-space> → **SDK: Docker**, hardware **CPU basic (free)**.
-2. Log in so git can push: `pip install huggingface_hub && huggingface-cli login`
+2. Log in so git can push: `pip install huggingface_hub && hf auth login`
    (or paste a write token when git prompts for a password).
 3. Push:
 
