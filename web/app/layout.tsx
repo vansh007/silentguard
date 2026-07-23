@@ -1,20 +1,36 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import { PerfProvider } from "@/components/perf";
 import PerfToggle from "@/components/PerfToggle";
 import { Aurora, GridPattern } from "@/components/ui";
 
+// Prose in a display sans; every measured number stays monospaced so digits line up.
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
+
+const SITE = "SilentGuard — ICU false-alarm intelligence";
+const DESC =
+  "Real-time ICU alarm triage: suppress false alarms without ever silencing a real emergency. A research prototype on PhysioNet/CinC 2015.";
+
 export const metadata: Metadata = {
-  title: "SilentGuard — ICU false-alarm intelligence",
-  description:
-    "Real-time ICU alarm triage: suppress false alarms without ever silencing a real emergency. Research prototype.",
+  title: { default: SITE, template: "%s" },
+  description: DESC,
+  applicationName: "SilentGuard",
+  authors: [{ name: "Team Sentinel, VIT Chennai" }],
+  keywords: [
+    "ICU", "false alarm", "alarm fatigue", "arrhythmia", "ECG",
+    "PhysioNet", "CinC 2015", "machine learning", "healthcare",
+  ],
+  openGraph: { title: SITE, description: DESC, type: "website", siteName: "SilentGuard" },
+  twitter: { card: "summary_large_image", title: SITE, description: DESC },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen font-mono antialiased">
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <body className="min-h-screen font-sans antialiased">
         <PerfProvider>
           {/* ambient background: ECG-paper grid + drifting glows */}
           <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">

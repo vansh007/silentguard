@@ -161,7 +161,7 @@ export default function Results() {
                 className="absolute inset-x-0 top-0 h-px"
                 style={{ background: `linear-gradient(90deg, transparent, ${k.c}, transparent)` }}
               />
-              <div className="text-2xl font-bold tabular-nums text-white sm:text-3xl">{k.v}</div>
+              <div className="text-2xl font-bold font-mono tabular-nums text-white sm:text-3xl">{k.v}</div>
               <div className="mt-1 text-[12px] text-slate-300">{k.l}</div>
               <div className="mt-0.5 text-[10px] text-muted">{k.s}</div>
             </SpotlightCard>
@@ -343,7 +343,7 @@ function Table({
                         ? hot
                           ? "font-semibold text-ecg"
                           : "text-slate-200"
-                        : "tabular-nums text-slate-300"
+                        : "font-mono tabular-nums text-slate-300"
                     )}
                   >
                     {c}

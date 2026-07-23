@@ -6,7 +6,9 @@ import {
   DECISION_META,
   ExplainerCard,
   fetchExplainer,
+  fetchSaliency,
   fetchWaveform,
+  SaliencyData,
   WaveformData,
 } from "@/lib/api";
 import ECGCanvas from "./ECGCanvas";
@@ -25,6 +27,7 @@ export default function Explainer() {
   const { reduced } = usePerf();
   const [cards, setCards] = useState<ExplainerCard[] | null>(null);
   const [waves, setWaves] = useState<Record<string, WaveformData>>({});
+  const [sal, setSal] = useState<Record<string, SaliencyData>>({});
   const [active, setActive] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -33,11 +36,14 @@ export default function Explainer() {
       .then((cs) => {
         setCards(cs);
         setActive(cs[0]?.type ?? null);
-        cs.forEach((c) =>
+        cs.forEach((c) => {
           fetchWaveform(c.record, 8)
             .then((w) => setWaves((prev) => ({ ...prev, [c.record]: w })))
-            .catch(() => {})
-        );
+            .catch(() => {});
+          fetchSaliency(c.record, 120)
+            .then((s) => setSal((prev) => ({ ...prev, [c.record]: s })))
+            .catch(() => {});
+        });
       })
       .catch((e) => setErr(String(e)));
   }, []);
@@ -168,6 +174,13 @@ export default function Explainer() {
                     )}
                   </div>
 
+                  {/* where the CNN looked, on this exact record */}
+                  {sal[card.record] && (
+                    <div className="mt-2">
+                      <SaliencyStrip data={sal[card.record]} tone={tone} />
+                    </div>
+                  )}
+
                   {/* engine verdict on this exact record */}
                   <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Card className="p-4">
@@ -179,7 +192,7 @@ export default function Explainer() {
                           <span className="text-lg font-bold" style={{ color: d.color }}>
                             {d.label}
                           </span>
-                          <span className="text-[12px] tabular-nums text-muted">
+                          <span className="text-[12px] font-mono tabular-nums text-muted">
                             {Math.round((card.confidence ?? 0) * 100)}% conf.
                           </span>
                         </div>
@@ -229,7 +242,7 @@ export default function Explainer() {
         )}
       </AnimatePresence>
 
-      {/* quick jump strip */}
+      {/* type strip */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         {cards.map((c) => {
           const on = c.type === active;
@@ -251,6 +264,45 @@ export default function Explainer() {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------- saliency strip */
+
+/**
+ * Grad-CAM attention across the CNN's analysis window, drawn as a heat strip.
+ * Real model output — the taller/brighter the band, the more that slice of the
+ * waveform drove the network's decision.
+ */
+function SaliencyStrip({ data, tone }: { data: SaliencyData; tone: string }) {
+  const s = data.saliency;
+  const peakIdx = s.reduce((b, v, i) => (v > s[b] ? i : b), 0);
+  const peakS = data.window_seconds * (1 - (peakIdx + 0.5) / s.length);
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-[10px] text-muted">
+        <span>where the CNN looked (Grad-CAM)</span>
+        <span className="font-mono">peak {peakS.toFixed(1)}s before the alarm</span>
+      </div>
+      <div className="flex h-6 items-end gap-px overflow-hidden rounded-md bg-white/[0.03] p-px">
+        {s.map((v, i) => (
+          <span
+            key={i}
+            className="flex-1 rounded-[1px]"
+            style={{
+              height: `${Math.max(6, v * 100)}%`,
+              background: tone,
+              opacity: 0.18 + 0.82 * v,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[9px] text-muted">
+        <span>−{data.window_seconds}s</span>
+        <span>alarm</span>
       </div>
     </div>
   );

@@ -102,7 +102,7 @@ export default function SafetyDial() {
               true-alarm sensitivity floor
             </label>
             <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-4xl font-bold tabular-nums text-white">
+              <span className="text-4xl font-bold font-mono tabular-nums text-white">
                 {(floor * 100).toFixed(1)}%
               </span>
               <span className="text-[12px] text-muted">of real emergencies must survive</span>
@@ -173,13 +173,13 @@ export default function SafetyDial() {
             <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/[0.07] pt-4 text-[12px]">
               <div>
                 <div className="text-muted">challenge score</div>
-                <div className="text-lg font-semibold tabular-nums text-white">
+                <div className="text-lg font-semibold font-mono tabular-nums text-white">
                   {report.score.toFixed(3)}
                 </div>
               </div>
               <div>
                 <div className="text-muted">suppress cutoff (t_high)</div>
-                <div className="text-lg font-semibold tabular-nums text-white">
+                <div className="text-lg font-semibold font-mono tabular-nums text-white">
                   {report.tHigh.toFixed(3)}
                 </div>
               </div>
@@ -198,7 +198,7 @@ export default function SafetyDial() {
           <div>
             <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
               <span>false-alarm suppression vs. true-alarm sensitivity</span>
-              <span className="tabular-nums">{curve.length} operating points</span>
+              <span className="font-mono tabular-nums">{curve.length} operating points</span>
             </div>
             <TradeoffPlot curve={curve} floor={floor} report={report} reduced={reduced} />
             <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
@@ -235,7 +235,7 @@ function Stat({
     <div>
       <div className="flex items-baseline justify-between">
         <span className="text-[12px] text-slate-300">{label}</span>
-        <span className="text-[15px] font-semibold tabular-nums" style={{ color }}>
+        <span className="text-[15px] font-semibold font-mono tabular-nums" style={{ color }}>
           {value}
         </span>
       </div>
@@ -376,7 +376,7 @@ function DecisionSplit({
         {parts.map((p) => (
           <span key={p.k} className="flex items-center gap-1.5 text-muted">
             <span className="h-2 w-2 rounded-sm" style={{ background: p.c }} />
-            {p.k} <b className="tabular-nums text-slate-200">{p.v}</b>
+            {p.k} <b className="font-mono tabular-nums text-slate-200">{p.v}</b>
           </span>
         ))}
       </div>

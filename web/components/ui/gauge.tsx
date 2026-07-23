@@ -59,7 +59,7 @@ export default function Gauge({
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-bold tabular-nums text-white">
+        <div className="text-2xl font-bold font-mono tabular-nums text-white">
           {label ?? `${Math.round(pct * 100)}%`}
         </div>
         {sub && <div className="mt-0.5 text-[10px] uppercase tracking-wider text-muted">{sub}</div>}

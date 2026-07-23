@@ -16,7 +16,9 @@ const config: Config = {
         muted: "#7d8794",
       },
       fontFamily: {
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        // prose/UI in a display sans, measured numbers in mono (see app/layout.tsx)
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
         glow: "0 0 40px -10px rgba(61,220,132,0.45)",

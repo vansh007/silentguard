@@ -60,7 +60,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] uppercase tracking-wider",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wider",
         BADGE_TONES[tone],
         className
       )}
@@ -204,7 +204,9 @@ export function StatTile({
         className="absolute inset-x-0 top-0 h-px opacity-60"
         style={{ background: `linear-gradient(90deg, transparent, ${tone}, transparent)` }}
       />
-      <div className="text-3xl font-bold tracking-tight text-white sm:text-4xl">{value}</div>
+      <div className="font-mono text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+        {value}
+      </div>
       <div className="mt-1.5 text-[13px] text-slate-300">{label}</div>
       {sub && <div className="mt-0.5 text-[11px] text-muted">{sub}</div>}
     </Card>

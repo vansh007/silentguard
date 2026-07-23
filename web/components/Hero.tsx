@@ -1,9 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { fetchHeartbeat, HeartbeatData } from "@/lib/api";
 import { usePerf } from "./perf";
 import { Badge, Button, Dot, Meteors } from "./ui";
+
+/** The heart beats with this record's real rhythm: a FALSE asystole alarm on a beating heart. */
+const HERO_RECORD = "a163l";
 
 const ParticleHeart = dynamic(() => import("./three/ParticleHeart"), {
   ssr: false,
@@ -73,12 +78,20 @@ const item = {
 
 export default function Hero() {
   const { reduced } = usePerf();
+  const [hb, setHb] = useState<HeartbeatData | null>(null);
+
+  useEffect(() => {
+    fetchHeartbeat(HERO_RECORD)
+      .then((d) => d.beat_times_s?.length > 2 && setHb(d))
+      .catch(() => {}); // engine down — the heart falls back to a steady rate, captioned as such
+  }, []);
+
   return (
     <section className="relative flex min-h-[92vh] flex-col justify-center overflow-hidden">
       {/* particle heart */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className="absolute left-1/2 top-[42%] h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2">
-          <ParticleHeart bpm={72} reduced={reduced} />
+          <ParticleHeart beatTimes={hb?.beat_times_s} reduced={reduced} />
         </div>
         {/* radial scrim for legibility + depth */}
         <div
@@ -131,10 +144,25 @@ export default function Hero() {
 
         <motion.div variants={item} className="mt-9 flex flex-wrap justify-center gap-3">
           <Button href="/monitor">▶ Try the live monitor</Button>
-          <Button href="/explainer" variant="outline">
-            Learn the alarms
+          <Button href="/ward" variant="outline">
+            See a whole ward
           </Button>
         </motion.div>
+
+        {/* what the heart is actually doing — stated, not implied */}
+        <motion.p variants={item} className="mt-8 text-[11px] leading-relaxed text-muted">
+          {hb ? (
+            <>
+              This heart beats on the real rhythm of record{" "}
+              <b className="text-slate-300">{hb.record_id}</b> — {hb.bpm} bpm, {hb.n_beats} QRS
+              complexes our detector found — a{" "}
+              <b className="text-suppress">false {hb.arrhythmia?.toLowerCase()} alarm</b> on a heart
+              that never stopped.
+            </>
+          ) : (
+            <>Engine offline — the heart is running at a placeholder rate, not patient data.</>
+          )}
+        </motion.p>
       </motion.div>
 
       {/* scroll cue */}

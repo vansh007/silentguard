@@ -110,7 +110,7 @@ export default function LoaoExplorer() {
                         />
                         {t}
                       </span>
-                      <span className="tabular-nums text-[12px]" style={{ color: TONES[t] }}>
+                      <span className="font-mono tabular-nums text-[12px]" style={{ color: TONES[t] }}>
                         {s.toFixed(3)}
                       </span>
                     </div>
@@ -147,7 +147,7 @@ export default function LoaoExplorer() {
             <div className="flex items-end gap-6">
               <div>
                 <div className="text-[11px] text-muted">trained on all five</div>
-                <div className="text-3xl font-bold tabular-nums text-white">
+                <div className="text-3xl font-bold font-mono tabular-nums text-white">
                   {Number.isFinite(ref) ? ref.toFixed(3) : "—"}
                 </div>
               </div>
@@ -164,7 +164,7 @@ export default function LoaoExplorer() {
                   key={held + model}
                   initial={reduced ? false : { opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-3xl font-bold tabular-nums"
+                  className="text-3xl font-bold font-mono tabular-nums"
                   style={{ color: TONES[held] }}
                 >
                   {Number.isFinite(cur) ? cur.toFixed(3) : "—"}
@@ -182,7 +182,7 @@ export default function LoaoExplorer() {
               <Card className="p-4">
                 <div className="text-[10px] uppercase tracking-wider text-muted">AUROC</div>
                 <div
-                  className="mt-1 text-xl font-bold tabular-nums"
+                  className="mt-1 text-xl font-bold font-mono tabular-nums"
                   style={{ color: curAuroc < 0.5 ? "#ef4444" : "#e6edf3" }}
                 >
                   {Number.isFinite(curAuroc) ? curAuroc.toFixed(3) : "—"}
@@ -195,7 +195,7 @@ export default function LoaoExplorer() {
                 <div className="text-[10px] uppercase tracking-wider text-muted">
                   true-alarm sensitivity
                 </div>
-                <div className="mt-1 text-xl font-bold tabular-nums text-white">
+                <div className="mt-1 text-xl font-bold font-mono tabular-nums text-white">
                   {Number.isFinite(curSens) ? `${(curSens * 100).toFixed(0)}%` : "—"}
                 </div>
                 <div className="mt-1 text-[10px] text-muted">real alarms that survived</div>

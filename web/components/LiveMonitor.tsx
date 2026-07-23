@@ -6,6 +6,8 @@ import {
   DECISION_META,
   DemoRecord,
   fetchRecords,
+  fetchSaliency,
+  SaliencyData,
   streamUrl,
   StreamMsg,
   Verdict,
@@ -44,6 +46,9 @@ export default function LiveMonitor() {
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
+  const [saliency, setSaliency] = useState<SaliencyData | null>(null);
+  const [showSaliency, setShowSaliency] = useState(true);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bufRef = useRef<number[]>([]);
   const beatsRef = useRef<Set<number>>(new Set());
@@ -51,6 +56,8 @@ export default function LiveMonitor() {
   const flashRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const rafRef = useRef<number | null>(null);
+  const salRef = useRef<{ data: SaliencyData; show: boolean; windowS: number } | null>(null);
+  const streamSecondsRef = useRef(24);
 
   useEffect(() => {
     fetchRecords()
@@ -114,6 +121,36 @@ export default function LiveMonitor() {
       const step = W / n;
       const mid = H / 2;
       const amp = H * 0.34;
+
+      // Grad-CAM heat under the trace: where the CNN actually looked. The analysis
+      // window is the LAST `window_seconds` of the displayed stream, so it occupies
+      // the right-hand fraction of the canvas.
+      const sal = salRef.current;
+      if (sal?.show) {
+        const s = sal.data.saliency;
+        const frac = Math.min(1, sal.data.window_seconds / sal.windowS);
+        const x0 = W * (1 - frac);
+        const bw = (W - x0) / s.length;
+        for (let i = 0; i < s.length; i++) {
+          const v = s[i];
+          if (v <= 0.02) continue;
+          const g = ctx.createLinearGradient(0, 0, 0, H);
+          g.addColorStop(0, `rgba(245,158,11,0)`);
+          g.addColorStop(0.5, `rgba(245,158,11,${0.28 * v})`);
+          g.addColorStop(1, `rgba(245,158,11,0)`);
+          ctx.fillStyle = g;
+          ctx.fillRect(x0 + i * bw, 0, bw + 0.6, H);
+        }
+        // bracket marking the analysis window
+        ctx.strokeStyle = "rgba(245,158,11,0.5)";
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0, 0);
+        ctx.lineTo(x0, H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       // glow pass, then the crisp trace on top
       ctx.lineJoin = "round";
@@ -194,6 +231,8 @@ export default function LiveMonitor() {
     setSelected(id);
     setVerdict(null);
     setMeta(null);
+    setSaliency(null);
+    salRef.current = null;
     setStatus("loading");
 
     const ws = new WebSocket(streamUrl(id));
@@ -203,6 +242,7 @@ export default function LiveMonitor() {
       if (m.type === "meta") {
         bufRef.current = new Array(m.total).fill(0);
         m.beats.forEach((b) => beatsRef.current.add(b));
+        streamSecondsRef.current = m.seconds || m.total / m.fs;
         setMeta({ channel: m.channel, fs: m.fs, arrhythmia: m.arrhythmia });
         setStatus("monitoring");
       } else if (m.type === "samples") {
@@ -214,6 +254,13 @@ export default function LiveMonitor() {
       } else if (m.type === "verdict") {
         setVerdict(m);
         setStatus("analyzed");
+        // ask the engine where the CNN looked for this exact record
+        fetchSaliency(id)
+          .then((s) => {
+            setSaliency(s);
+            salRef.current = { data: s, show: true, windowS: streamSecondsRef.current };
+          })
+          .catch(() => {});
       } else if (m.type === "error") {
         setApiError(m.detail);
         setStatus("error");
@@ -226,6 +273,11 @@ export default function LiveMonitor() {
   }, []);
 
   useEffect(() => () => wsRef.current?.close(), []);
+
+  // keep the canvas' view of the overlay in sync with the toggle
+  useEffect(() => {
+    if (salRef.current) salRef.current.show = showSaliency;
+  }, [showSaliency]);
 
   const st = STATUS_META[status];
   const analysing = status === "alarm";
@@ -365,10 +417,34 @@ export default function LiveMonitor() {
             </div>
 
             {/* legend */}
-            <div className="pointer-events-none absolute bottom-3 left-4 flex items-center gap-2 text-[10px] text-muted">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[rgba(120,180,255,0.9)]" />
-              detected QRS complexes (real, from our beat detector)
+            <div className="pointer-events-none absolute bottom-3 left-4 flex flex-wrap items-center gap-3 text-[10px] text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[rgba(120,180,255,0.9)]" />
+                detected QRS complexes (real, from our beat detector)
+              </span>
+              {saliency && showSaliency && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-4 rounded-sm bg-gradient-to-r from-transparent via-[rgba(245,158,11,0.55)] to-transparent" />
+                  where the CNN looked (Grad-CAM, last {saliency.window_seconds}s)
+                </span>
+              )}
             </div>
+
+            {/* saliency toggle */}
+            {saliency && (
+              <button
+                onClick={() => setShowSaliency((v) => !v)}
+                className={cn(
+                  "absolute bottom-3 right-4 rounded-lg border px-2.5 py-1 text-[10px] transition",
+                  showSaliency
+                    ? "border-defer/40 bg-defer/10 text-defer"
+                    : "border-white/10 text-muted hover:text-white"
+                )}
+                title="Overlay the CNN's Grad-CAM attention on the waveform"
+              >
+                {showSaliency ? "◉" : "◎"} model attention
+              </button>
+            )}
 
             {!selected && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -391,7 +467,7 @@ export default function LiveMonitor() {
                 exit={reduced ? {} : { opacity: 0, y: -10 }}
                 transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
               >
-                <VerdictPanel v={verdict} />
+                <VerdictPanel v={verdict} saliency={saliency} />
               </motion.div>
             ) : (
               <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -411,9 +487,19 @@ export default function LiveMonitor() {
 
 /* ------------------------------------------------------------- verdict */
 
-function VerdictPanel({ v }: { v: Verdict }) {
+function VerdictPanel({ v, saliency }: { v: Verdict; saliency: SaliencyData | null }) {
   const { reduced } = usePerf();
   const d = DECISION_META[v.decision];
+
+  // when in the analysis window the CNN's attention peaked, in seconds before the alarm
+  const peak = saliency?.saliency.length
+    ? (() => {
+        const s = saliency.saliency;
+        let bi = 0;
+        for (let i = 1; i < s.length; i++) if (s[i] > s[bi]) bi = i;
+        return saliency.window_seconds * (1 - (bi + 0.5) / s.length);
+      })()
+    : null;
   const truth = v.true_label === 1 ? "TRUE alarm" : v.true_label === 0 ? "FALSE alarm" : "unknown";
   const correct =
     v.true_label == null
@@ -442,13 +528,13 @@ function VerdictPanel({ v }: { v: Verdict }) {
             <dl className="mt-3 space-y-1 text-[12px]">
               <div className="flex gap-2">
                 <dt className="text-muted">P(false)</dt>
-                <dd className="tabular-nums text-slate-200">
+                <dd className="font-mono tabular-nums text-slate-200">
                   {(v.p_false * 100).toFixed(1)}%
                 </dd>
               </div>
               <div className="flex gap-2">
                 <dt className="text-muted">latency used</dt>
-                <dd className="tabular-nums text-slate-200">{v.latency_used_s}s</dd>
+                <dd className="font-mono tabular-nums text-slate-200">{v.latency_used_s}s</dd>
               </div>
               <div className="flex gap-2">
                 <dt className="text-muted">record</dt>
@@ -496,6 +582,14 @@ function VerdictPanel({ v }: { v: Verdict }) {
               );
             })}
           </div>
+
+          {peak != null && (
+            <p className="mt-3 rounded-lg border border-defer/20 bg-defer/[0.05] p-2.5 text-[11px] leading-relaxed text-slate-300">
+              <b className="text-defer">And where:</b> the CNN&apos;s attention peaked{" "}
+              <b className="font-mono">{peak.toFixed(1)}s</b> before the alarm — highlighted on the
+              trace above. SHAP says which feature mattered; Grad-CAM says when.
+            </p>
+          )}
         </div>
       </div>
 

@@ -6,7 +6,10 @@ import * as THREE from "three";
 
 /**
  * A glowing heart-shaped particle cloud that beats on a cardiac rhythm.
- * `bpm` sets the beat rate — wire it to a real record's heart rate to keep it honest.
+ *
+ * Pass `beatTimes` — the QRS times our detector actually found in a real record — and the
+ * heart contracts on that patient's real inter-beat intervals, irregularities included.
+ * `bpm` is only the fallback for when the engine is unreachable.
  */
 function heartXY(t: number): [number, number] {
   const x = 16 * Math.pow(Math.sin(t), 3);
@@ -21,7 +24,36 @@ function beatEnvelope(phase: number): number {
   return 0;
 }
 
-function HeartPoints({ bpm = 72, reduced = false }: { bpm?: number; reduced?: boolean }) {
+/**
+ * Phase within the current beat, driven by real QRS times.
+ * Loops the recorded window seamlessly; returns null if the times are unusable.
+ */
+function phaseFromBeats(beatTimes: number[], elapsed: number): number | null {
+  const n = beatTimes.length;
+  if (n < 3) return null;
+  const t0 = beatTimes[0];
+  const span = beatTimes[n - 1] - t0;
+  if (!(span > 0)) return null;
+
+  const t = t0 + (elapsed % span);
+  for (let i = n - 2; i >= 0; i--) {
+    if (t >= beatTimes[i]) {
+      const rr = beatTimes[i + 1] - beatTimes[i];
+      return rr > 0 ? (t - beatTimes[i]) / rr : null;
+    }
+  }
+  return null;
+}
+
+function HeartPoints({
+  bpm = 72,
+  beatTimes,
+  reduced = false,
+}: {
+  bpm?: number;
+  beatTimes?: number[];
+  reduced?: boolean;
+}) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = reduced ? 1400 : 6000;
@@ -48,7 +80,9 @@ function HeartPoints({ bpm = 72, reduced = false }: { bpm?: number; reduced?: bo
     const pts = pointsRef.current;
     if (!pts) return;
     const time = state.clock.elapsedTime;
-    const phase = (time * (bpm / 60)) % 1;
+    // real inter-beat intervals when we have them; a steady rate only as fallback
+    const realPhase = beatTimes ? phaseFromBeats(beatTimes, time) : null;
+    const phase = realPhase ?? (time * (bpm / 60)) % 1;
     const env = beatEnvelope(phase);
     const pulse = 1 + 0.09 * env;
 
@@ -101,9 +135,11 @@ function HeartPoints({ bpm = 72, reduced = false }: { bpm?: number; reduced?: bo
 
 export default function ParticleHeart({
   bpm = 72,
+  beatTimes,
   reduced = false,
 }: {
   bpm?: number;
+  beatTimes?: number[];
   reduced?: boolean;
 }) {
   return (
@@ -115,7 +151,7 @@ export default function ParticleHeart({
       style={{ width: "100%", height: "100%" }}
     >
       <color attach="background" args={["#05070a"]} />
-      <HeartPoints bpm={bpm} reduced={reduced} />
+      <HeartPoints bpm={bpm} beatTimes={beatTimes} reduced={reduced} />
     </Canvas>
   );
 }

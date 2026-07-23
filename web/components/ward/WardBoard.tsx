@@ -78,7 +78,7 @@ export default function WardBoard() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-[10px] uppercase tracking-wider text-muted">noise reduction</div>
-              <div className="text-xl font-bold tabular-nums text-ecg">
+              <div className="text-xl font-bold font-mono tabular-nums text-ecg">
                 {(reduction * 100).toFixed(0)}%
               </div>
             </div>
@@ -136,7 +136,7 @@ function TallyStat({ v, l, c }: { v: number; l: string; c: string }) {
         initial={{ scale: 1.25, opacity: 0.6 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.3 }}
-        className="text-2xl font-bold tabular-nums"
+        className="text-2xl font-bold font-mono tabular-nums"
         style={{ color: c }}
       >
         {v}
@@ -335,7 +335,7 @@ function BedTile({
             <span className="text-[11px] text-muted">{record.id}</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider">
-            {hr != null && <span className="tabular-nums text-slate-300">{hr} bpm</span>}
+            {hr != null && <span className="font-mono tabular-nums text-slate-300">{hr} bpm</span>}
             <span className="flex items-center gap-1.5" style={{ color: alarming ? "#ef4444" : "#3ddc84" }}>
               <Dot color={alarming ? "#ef4444" : "#3ddc84"} pulse={status !== "idle"} />
               {status === "alarm" ? record.arrhythmia : status === "verdict" ? "resolved" : "monitoring"}
@@ -363,7 +363,7 @@ function BedTile({
                   <span className="text-[13px] font-bold" style={{ color: d.color }}>
                     {d.label}
                   </span>
-                  <span className="ml-2 text-[11px] tabular-nums text-muted">
+                  <span className="ml-2 text-[11px] font-mono tabular-nums text-muted">
                     {Math.round(verdict.confidence * 100)}% conf.
                   </span>
                 </div>
