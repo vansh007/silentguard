@@ -1,9 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { usePerf } from "./perf";
+import { Badge, Button, Dot, Meteors } from "./ui";
 
 const ParticleHeart = dynamic(() => import("./three/ParticleHeart"), {
   ssr: false,
@@ -18,7 +18,7 @@ function HeartGlowFallback() {
   );
 }
 
-/** A looping, self-drawing ECG line built from a P-QRS-T template. */
+/** A looping, self-drawing ECG line built from a P-QRS-T template (decorative). */
 function ECGLine() {
   const { reduced } = usePerf();
   const beats = 6;
@@ -64,7 +64,7 @@ function ECGLine() {
 
 const container = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.14, delayChildren: 0.2 } },
+  show: { transition: { staggerChildren: 0.13, delayChildren: 0.18 } },
 };
 const item = {
   hidden: { opacity: 0, y: 24 },
@@ -74,7 +74,7 @@ const item = {
 export default function Hero() {
   const { reduced } = usePerf();
   return (
-    <section className="relative flex min-h-[88vh] flex-col justify-center overflow-hidden">
+    <section className="relative flex min-h-[92vh] flex-col justify-center overflow-hidden">
       {/* particle heart */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <div className="absolute left-1/2 top-[42%] h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2">
@@ -85,10 +85,11 @@ export default function Hero() {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(60% 55% at 50% 42%, transparent 30%, rgba(5,7,10,0.55) 65%, #05070a 100%)",
+              "radial-gradient(60% 55% at 50% 42%, transparent 30%, rgba(5,7,10,0.58) 65%, #05070a 100%)",
           }}
         />
       </div>
+      <Meteors count={10} />
 
       {/* content */}
       <motion.div
@@ -97,38 +98,55 @@ export default function Hero() {
         animate={reduced ? undefined : "show"}
         className="relative z-10 mx-auto w-full max-w-5xl px-5 text-center"
       >
-        <motion.p variants={item} className="mb-4 text-[12px] uppercase tracking-[0.25em] text-ecg/80">
-          ICU false-alarm intelligence
-        </motion.p>
-        <motion.h1 variants={item} className="text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+        <motion.div variants={item} className="mb-6 flex justify-center">
+          <Badge tone="ecg" className="px-3 py-1.5">
+            <Dot />
+            PhysioNet / CinC 2015 · 750 real ICU alarms
+          </Badge>
+        </motion.div>
+
+        <motion.h1
+          variants={item}
+          className="bg-gradient-to-b from-white via-white to-slate-400 bg-clip-text text-4xl font-bold leading-[1.08] tracking-tight text-transparent sm:text-6xl"
+        >
           Every ICU heartbeat
           <br />
           tells a story.
         </motion.h1>
+
         <motion.p variants={item} className="mt-4 text-2xl font-medium text-muted sm:text-3xl">
           Not every alarm tells the truth.
         </motion.p>
-        <motion.p variants={item} className="mx-auto mt-6 max-w-xl text-[15px] leading-relaxed text-slate-300">
+
+        <motion.p
+          variants={item}
+          className="mx-auto mt-6 max-w-xl text-[15px] leading-relaxed text-slate-300"
+        >
           Most ICU arrhythmia alarms are false. SilentGuard reads the waveform behind each one and
-          decides — in real time — <span className="text-suppress">suppress</span>,{" "}
-          <span className="text-keep">keep</span>, or <span className="text-defer">defer</span>,
-          without ever silencing a real emergency.
+          decides — in real time — <span className="font-semibold text-suppress">suppress</span>,{" "}
+          <span className="font-semibold text-keep">keep</span>, or{" "}
+          <span className="font-semibold text-defer">defer</span>, without ever silencing a real
+          emergency.
         </motion.p>
-        <motion.div variants={item} className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link
-            href="/monitor"
-            className="rounded-lg bg-ecg px-6 py-3 text-sm font-semibold text-[#04140c] shadow-[0_0_30px_-6px_#3ddc84] transition hover:brightness-110"
-          >
-            ▶ Try the live monitor
-          </Link>
-          <Link
-            href="/explainer"
-            className="rounded-lg border border-hair bg-white/[0.02] px-6 py-3 text-sm text-slate-200 backdrop-blur transition hover:border-slate-500"
-          >
+
+        <motion.div variants={item} className="mt-9 flex flex-wrap justify-center gap-3">
+          <Button href="/monitor">▶ Try the live monitor</Button>
+          <Button href="/explainer" variant="outline">
             Learn the alarms
-          </Link>
+          </Button>
         </motion.div>
       </motion.div>
+
+      {/* scroll cue */}
+      {!reduced && (
+        <motion.div
+          className="absolute bottom-[132px] left-1/2 z-10 -translate-x-1/2 text-[10px] uppercase tracking-[0.25em] text-muted"
+          animate={{ opacity: [0.25, 0.8, 0.25], y: [0, 5, 0] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+        >
+          scroll
+        </motion.div>
+      )}
 
       {/* ecg line at the bottom */}
       <div className="pointer-events-none absolute bottom-6 left-0 right-0 z-10 opacity-70">

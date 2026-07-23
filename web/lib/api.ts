@@ -121,3 +121,17 @@ export async function fetchResults(): Promise<ResultsData> {
 }
 
 export const figureUrl = (name: string) => `${API_BASE}/figures/${name}`;
+
+// ---- Health (live engine status indicator) ----
+export interface Health {
+  status: "ok" | "degraded";
+  model_loaded: boolean;
+  detail: string;
+  n_demo_records: number;
+}
+
+export async function fetchHealth(): Promise<Health> {
+  const r = await fetch(`${API_BASE}/health`, { cache: "no-store" });
+  if (!r.ok) throw new Error(`health ${r.status}`);
+  return (await r.json()) as Health;
+}
