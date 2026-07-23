@@ -3,6 +3,7 @@ import HeadlineStats from "@/components/HeadlineStats";
 import Hero from "@/components/Hero";
 import DecisionCards from "@/components/home/DecisionCards";
 import ArrhythmiaTicker from "@/components/home/ArrhythmiaTicker";
+import AlarmSequence from "@/components/home/AlarmSequence";
 import { Reveal } from "@/components/motion";
 import {
   Badge,
@@ -114,6 +115,16 @@ export default function Home() {
             </div>
           </Reveal>
           <ArrhythmiaTicker />
+        </section>
+
+        {/* ------------------------------------------------ the story */}
+        <section className="mb-24">
+          <SectionHeading
+            eyebrow="the story"
+            title="One alarm, start to finish"
+            sub="Watch a real CinC-2015 record go from a stable rhythm to a screaming monitor to a reasoned verdict. The decision at the end is fetched live from the engine."
+          />
+          <AlarmSequence />
         </section>
 
         {/* ------------------------------------------------ the problem */}
