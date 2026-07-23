@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { DECISION_META, DemoRecord, fetchRecords, streamUrl, StreamMsg, Verdict } from "@/lib/api";
+import { useDecisionText, useLang } from "@/lib/i18n";
+import LangToggle from "../LangToggle";
 import { usePerf } from "../perf";
 import { Badge, Card, Dot, Skeleton, cn } from "../ui";
 
@@ -24,6 +26,7 @@ const EMPTY: Tally = { fired: 0, suppress: 0, keep: 0, defer: 0, missedReal: 0 }
  * running count of what actually happened this session, not a stored statistic.
  */
 export default function WardBoard() {
+  const { t } = useLang();
   const [records, setRecords] = useState<DemoRecord[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [running, setRunning] = useState(true);
@@ -65,19 +68,19 @@ export default function WardBoard() {
       <Card className="overflow-hidden p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-5">
-            <TallyStat v={tally.fired} l="alarms fired" c="#e6edf3" />
-            <TallyStat v={tally.suppress} l="silenced" c="#ef4444" />
-            <TallyStat v={tally.keep} l="reached the nurse" c="#22c55e" />
-            <TallyStat v={tally.defer} l="deferred" c="#f59e0b" />
+            <TallyStat v={tally.fired} l={t("alarms_fired")} c="#e6edf3" />
+            <TallyStat v={tally.suppress} l={t("silenced")} c="#ef4444" />
+            <TallyStat v={tally.keep} l={t("reached_nurse")} c="#22c55e" />
+            <TallyStat v={tally.defer} l={t("deferred")} c="#f59e0b" />
             <TallyStat
               v={tally.missedReal}
-              l="real alarms missed"
+              l={t("missed_real")}
               c={tally.missedReal === 0 ? "#3ddc84" : "#ef4444"}
             />
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
-              <div className="text-[10px] uppercase tracking-wider text-muted">noise reduction</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted">{t("noise_reduction")}</div>
               <div className="text-xl font-bold font-mono tabular-nums text-ecg">
                 {(reduction * 100).toFixed(0)}%
               </div>
@@ -162,6 +165,8 @@ function BedTile({
   onVerdict: (v: Verdict) => void;
 }) {
   const { reduced } = usePerf();
+  const { t } = useLang();
+  const dtext = useDecisionText();
   const [status, setStatus] = useState<BedStatus>("idle");
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [hr, setHr] = useState<number | null>(null);
@@ -330,7 +335,7 @@ function BedTile({
         <div className="mb-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-semibold text-white">
-              Bed {bed}
+              {t("bed")} {bed}
             </span>
             <span className="text-[11px] text-muted">{record.id}</span>
           </div>
@@ -338,14 +343,18 @@ function BedTile({
             {hr != null && <span className="font-mono tabular-nums text-slate-300">{hr} bpm</span>}
             <span className="flex items-center gap-1.5" style={{ color: alarming ? "#ef4444" : "#3ddc84" }}>
               <Dot color={alarming ? "#ef4444" : "#3ddc84"} pulse={status !== "idle"} />
-              {status === "alarm" ? record.arrhythmia : status === "verdict" ? "resolved" : "monitoring"}
+              {status === "alarm"
+                ? record.arrhythmia
+                : status === "verdict"
+                  ? t("resolved")
+                  : t("monitoring")}
             </span>
           </div>
         </div>
 
         {/* trace */}
         <div className="overflow-hidden rounded-lg border border-white/[0.06]" style={{ background: "#04120b" }}>
-          <canvas ref={canvasRef} className="block h-[118px] w-full" />
+          <canvas ref={canvasRef} className="block h-[100px] w-full sm:h-[118px]" />
         </div>
 
         {/* verdict */}
@@ -361,19 +370,19 @@ function BedTile({
               >
                 <div>
                   <span className="text-[13px] font-bold" style={{ color: d.color }}>
-                    {d.label}
+                    {dtext(verdict.decision).label}
                   </span>
                   <span className="ml-2 text-[11px] font-mono tabular-nums text-muted">
                     {Math.round(verdict.confidence * 100)}% conf.
                   </span>
                 </div>
                 <Badge tone={verdict.true_label === 1 ? "keep" : "suppress"}>
-                  {verdict.true_label === 1 ? "was real" : "was false"}
+                  {verdict.true_label === 1 ? t("was_real") : t("was_false")}
                 </Badge>
               </motion.div>
             ) : (
               <motion.div key="wait" className="text-[11px] text-muted">
-                {status === "alarm" ? "engine analysing…" : "streaming pre-alarm ECG…"}
+                {status === "alarm" ? `${t("analysing")}…` : "streaming pre-alarm ECG…"}
               </motion.div>
             )}
           </AnimatePresence>

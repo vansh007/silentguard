@@ -12,7 +12,10 @@ import {
   StreamMsg,
   Verdict,
 } from "@/lib/api";
+import { useDecisionText, useLang } from "@/lib/i18n";
+import LangToggle from "./LangToggle";
 import { usePerf } from "./perf";
+import { useSound } from "./sound";
 import {
   Badge,
   BorderBeam,
@@ -38,6 +41,7 @@ const STATUS_META: Record<Status, { text: string; color: string; pulse: boolean 
 
 export default function LiveMonitor() {
   const { reduced } = usePerf();
+  const sound = useSound();
   const [records, setRecords] = useState<DemoRecord[] | null>(null);
   const [filter, setFilter] = useState("ALL");
   const [selected, setSelected] = useState<string | null>(null);
@@ -57,6 +61,9 @@ export default function LiveMonitor() {
   const wsRef = useRef<WebSocket | null>(null);
   const rafRef = useRef<number | null>(null);
   const salRef = useRef<{ data: SaliencyData; show: boolean; windowS: number } | null>(null);
+  // keep the latest sound handles out of `play`'s dependency list
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
   const streamSecondsRef = useRef(24);
 
   useEffect(() => {
@@ -251,9 +258,11 @@ export default function LiveMonitor() {
       } else if (m.type === "alarm") {
         flashRef.current = 1;
         setStatus("alarm");
+        soundRef.current.alarm();
       } else if (m.type === "verdict") {
         setVerdict(m);
         setStatus("analyzed");
+        soundRef.current.verdict(m.decision);
         // ask the engine where the CNN looked for this exact record
         fetchSaliency(id)
           .then((s) => {
@@ -385,7 +394,16 @@ export default function LiveMonitor() {
         >
           {analysing && <BorderBeam color="#ef4444" duration={2.4} inset="#04120b" />}
           <div className="relative">
-            <canvas ref={canvasRef} className="block h-[340px] w-full" />
+            <canvas
+              ref={canvasRef}
+              className="block h-[240px] w-full sm:h-[340px]"
+              role="img"
+              aria-label={
+                meta
+                  ? `Live ECG trace, lead ${meta.channel}, ${meta.arrhythmia} alarm`
+                  : "ECG monitor, no record selected"
+              }
+            />
             {analysing && <ScanLine color="#ef4444" />}
 
             {/* top-left telemetry */}
@@ -489,6 +507,8 @@ export default function LiveMonitor() {
 
 function VerdictPanel({ v, saliency }: { v: Verdict; saliency: SaliencyData | null }) {
   const { reduced } = usePerf();
+  const { t, lang } = useLang();
+  const dt = useDecisionText()(v.decision);
   const d = DECISION_META[v.decision];
 
   // when in the analysis window the CNN's attention peaked, in seconds before the alarm
@@ -522,14 +542,25 @@ function VerdictPanel({ v, saliency }: { v: Verdict; saliency: SaliencyData | nu
               className="text-2xl font-bold tracking-tight"
               style={{ color: d.color, textShadow: `0 0 26px ${d.color}55` }}
             >
-              {d.label}
+              {dt.label}
             </div>
-            <div className="mt-0.5 text-[12px] text-muted">{d.sub}</div>
+            <div className="mt-0.5 text-[12px] text-muted">{dt.sub}</div>
+            {lang !== "en" && (
+              <div className="mt-0.5 text-[10px] text-muted/70">
+                {d.label} · {d.sub}
+              </div>
+            )}
             <dl className="mt-3 space-y-1 text-[12px]">
               <div className="flex gap-2">
                 <dt className="text-muted">P(false)</dt>
                 <dd className="font-mono tabular-nums text-slate-200">
                   {(v.p_false * 100).toFixed(1)}%
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="text-muted">{t("confidence")}</dt>
+                <dd className="font-mono tabular-nums text-slate-200">
+                  {(v.confidence * 100).toFixed(0)}%
                 </dd>
               </div>
               <div className="flex gap-2">
@@ -593,8 +624,14 @@ function VerdictPanel({ v, saliency }: { v: Verdict; saliency: SaliencyData | nu
         </div>
       </div>
 
+      {/* nurse-facing language */}
+      <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-white/[0.07] pt-4">
+        <LangToggle />
+        <span className="text-[10px] leading-relaxed text-muted">{t("translation_note")}</span>
+      </div>
+
       {/* honesty footer */}
-      <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-4 text-[11px] text-muted">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.07] pt-4 text-[11px] text-muted">
         <span>Ground truth for this record:</span>
         <Badge tone={v.true_label === 1 ? "keep" : "suppress"}>{truth}</Badge>
         {correct !== null && (

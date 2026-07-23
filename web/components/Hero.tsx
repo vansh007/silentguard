@@ -23,6 +23,16 @@ function HeartGlowFallback() {
   );
 }
 
+/** Some machines (old GPUs, locked-down browsers, VMs) have no WebGL — degrade, never crash. */
+function hasWebGL(): boolean {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
 /** A looping, self-drawing ECG line built from a P-QRS-T template (decorative). */
 function ECGLine() {
   const { reduced } = usePerf();
@@ -79,8 +89,10 @@ const item = {
 export default function Hero() {
   const { reduced } = usePerf();
   const [hb, setHb] = useState<HeartbeatData | null>(null);
+  const [webgl, setWebgl] = useState<boolean | null>(null);
 
   useEffect(() => {
+    setWebgl(hasWebGL());
     fetchHeartbeat(HERO_RECORD)
       .then((d) => d.beat_times_s?.length > 2 && setHb(d))
       .catch(() => {}); // engine down — the heart falls back to a steady rate, captioned as such
@@ -90,8 +102,12 @@ export default function Hero() {
     <section className="relative flex min-h-[92vh] flex-col justify-center overflow-hidden">
       {/* particle heart */}
       <div className="pointer-events-none absolute inset-0 z-0">
-        <div className="absolute left-1/2 top-[42%] h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2">
-          <ParticleHeart beatTimes={hb?.beat_times_s} reduced={reduced} />
+        <div className="absolute left-1/2 top-[42%] h-[360px] w-[360px] -translate-x-1/2 -translate-y-1/2 sm:h-[560px] sm:w-[560px]">
+          {webgl === false ? (
+            <HeartGlowFallback />
+          ) : webgl ? (
+            <ParticleHeart beatTimes={hb?.beat_times_s} reduced={reduced} />
+          ) : null}
         </div>
         {/* radial scrim for legibility + depth */}
         <div
