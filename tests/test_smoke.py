@@ -269,3 +269,21 @@ def test_explain_features_returns_topk():
     reasons = explain_features(model, X[0], names, k=3)
     assert len(reasons) == 3
     assert all(isinstance(n, str) for n, _ in reasons)
+
+
+def test_config_root_is_overridable(tmp_path, monkeypatch):
+    """Containers install the package non-editably, so ROOT must be settable explicitly."""
+    import importlib
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "config.yaml").write_text("paths:\n  processed: data/processed\n")
+
+    monkeypatch.setenv("SILENTGUARD_ROOT", str(tmp_path))
+    import silentguard.config as cfgmod
+    importlib.reload(cfgmod)
+    try:
+        assert cfgmod.ROOT == tmp_path.resolve()
+        assert cfgmod.resolve("data/processed") == (tmp_path / "data" / "processed").resolve()
+        assert cfgmod.load_config()["paths"]["processed"] == "data/processed"
+    finally:
+        monkeypatch.delenv("SILENTGUARD_ROOT", raising=False)
+        importlib.reload(cfgmod)   # restore the real root for other tests
